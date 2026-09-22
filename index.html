@@ -141,11 +141,11 @@
 
         <div id="overlay-current-title" class="text-sm font-semibold text-white truncate mb-2.5">Waiting for selection...</div>
         
-        <!-- Reliable Thumbnail Display Container -->
+        <!-- Embed Player Container -->
         <div class="relative w-full pt-[56.25%] bg-black/90 rounded-lg overflow-hidden border border-slate-800 shadow-inner group">
-          <div id="thumbnail-container" class="absolute inset-0 w-full h-full flex items-center justify-center">
-            <img id="overlay-thumbnail" src="" alt="Thumbnail" class="w-full h-full object-cover hidden">
-            <div id="thumbnail-placeholder" class="absolute inset-0 w-full h-full flex items-center justify-center text-slate-500 text-xs bg-slate-950">
+          <div id="embed-container" class="absolute inset-0 w-full h-full flex items-center justify-center">
+            <iframe id="overlay-iframe" src="" class="w-full h-full border-0 hidden" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+            <div id="embed-placeholder" class="absolute inset-0 w-full h-full flex items-center justify-center text-slate-500 text-xs bg-slate-950">
               <div class="text-center p-4">
                 <i class="fa-brands fa-youtube text-2xl text-slate-600 mb-1 block"></i>
                 <span>No video loaded</span>
@@ -237,7 +237,7 @@
     }
 
     function loadState() {
-      const saved = localStorage.getItem('yt_lets_watch_state_v7');
+      const saved = localStorage.getItem('yt_lets_watch_state_v8');
       if (saved) {
         try {
           state = JSON.parse(saved);
@@ -246,7 +246,7 @@
     }
 
     function saveState() {
-      localStorage.setItem('yt_lets_watch_state_v7', JSON.stringify(state));
+      localStorage.setItem('yt_lets_watch_state_v8', JSON.stringify(state));
       renderAll();
     }
 
@@ -264,8 +264,7 @@
           title: url, 
           creator: fallbackCreator || "Featured Creator", 
           url: url,
-          videoId: null,
-          thumbnail: null
+          videoId: null
         };
       }
 
@@ -294,8 +293,7 @@
         title: videoTitle,
         creator: creatorName,
         url: url,
-        videoId: videoId,
-        thumbnail: `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`
+        videoId: videoId
       };
     }
 
@@ -499,8 +497,8 @@
       const titleEl = document.getElementById('overlay-current-title');
       const creatorEl = document.getElementById('overlay-current-creator');
       const statusBadge = document.getElementById('player-status-badge');
-      const thumbnailImg = document.getElementById('overlay-thumbnail');
-      const thumbnailPlaceholder = document.getElementById('thumbnail-placeholder');
+      const overlayIframe = document.getElementById('overlay-iframe');
+      const embedPlaceholder = document.getElementById('embed-placeholder');
       
       if (state.current) {
         if (titleEl) titleEl.innerText = state.current.title;
@@ -509,13 +507,14 @@
           statusBadge.innerText = "Active";
           statusBadge.className = "text-[9px] bg-emerald-900/60 text-emerald-300 px-1.5 py-0.5 rounded font-mono";
         }
-        if (state.current.thumbnail && thumbnailImg && thumbnailPlaceholder) {
-          thumbnailImg.src = state.current.thumbnail;
-          thumbnailImg.classList.remove('hidden');
-          thumbnailPlaceholder.classList.add('hidden');
-        } else if (thumbnailImg && thumbnailPlaceholder) {
-          thumbnailImg.classList.add('hidden');
-          thumbnailPlaceholder.classList.remove('hidden');
+        if (state.current.videoId && overlayIframe && embedPlaceholder) {
+          overlayIframe.src = `https://www.youtube.com/embed/${state.current.videoId}?autoplay=1&enablejsapi=1`;
+          overlayIframe.classList.remove('hidden');
+          embedPlaceholder.classList.add('hidden');
+        } else if (overlayIframe && embedPlaceholder) {
+          overlayIframe.src = "";
+          overlayIframe.classList.add('hidden');
+          embedPlaceholder.classList.remove('hidden');
         }
       } else {
         if (titleEl) titleEl.innerText = "No video playing";
@@ -524,9 +523,10 @@
           statusBadge.innerText = "Inactive";
           statusBadge.className = "text-[9px] bg-red-900/60 text-red-300 px-1.5 py-0.5 rounded font-mono";
         }
-        if (thumbnailImg && thumbnailPlaceholder) {
-          thumbnailImg.classList.add('hidden');
-          thumbnailPlaceholder.classList.remove('hidden');
+        if (overlayIframe && embedPlaceholder) {
+          overlayIframe.src = "";
+          overlayIframe.classList.add('hidden');
+          embedPlaceholder.classList.remove('hidden');
         }
       }
 
@@ -562,7 +562,7 @@
     });
 
     window.addEventListener('storage', (e) => {
-      if (e.key === 'yt_lets_watch_state_v7') {
+      if (e.key === 'yt_lets_watch_state_v8') {
         loadState();
         renderAll();
       }

@@ -221,6 +221,16 @@
       queue: []
     };
 
+    // BroadcastChannel for instant cross-tab and OBS communication
+    const bc = new BroadcastChannel('yt_lets_watch_channel_v10');
+
+    bc.onmessage = (event) => {
+      if (event.data && event.data.type === 'STATE_UPDATE') {
+        state = event.data.state;
+        renderAll();
+      }
+    };
+
     function checkObsQueryParam() {
       const urlParams = new URLSearchParams(window.location.search);
       if (urlParams.get('obs') === 'true') {
@@ -237,7 +247,7 @@
     }
 
     function loadState() {
-      const saved = localStorage.getItem('yt_lets_watch_state_v9');
+      const saved = localStorage.getItem('yt_lets_watch_state_v10');
       if (saved) {
         try {
           state = JSON.parse(saved);
@@ -246,7 +256,8 @@
     }
 
     function saveState() {
-      localStorage.setItem('yt_lets_watch_state_v9', JSON.stringify(state));
+      localStorage.setItem('yt_lets_watch_state_v10', JSON.stringify(state));
+      bc.postMessage({ type: 'STATE_UPDATE', state: state });
       renderAll();
     }
 
@@ -562,7 +573,7 @@
     });
 
     window.addEventListener('storage', (e) => {
-      if (e.key === 'yt_lets_watch_state_v9') {
+      if (e.key === 'yt_lets_watch_state_v10') {
         loadState();
         renderAll();
       }

@@ -144,6 +144,7 @@
         <!-- Embed Player Container -->
         <div class="relative w-full pt-[56.25%] bg-black/90 rounded-lg overflow-hidden border border-slate-800 shadow-inner group">
           <div id="embed-container" class="absolute inset-0 w-full h-full flex items-center justify-center">
+            <!-- YouTube iframe with enablejsapi=1 for tracking state events -->
             <iframe id="overlay-iframe" src="" class="w-full h-full border-0 hidden" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
             <div id="embed-placeholder" class="absolute inset-0 w-full h-full flex items-center justify-center text-slate-500 text-xs bg-slate-950">
               <div class="text-center p-4">
@@ -221,6 +222,9 @@
       queue: []
     };
 
+    let player = null;
+    let isObserverMode = false;
+
     // BroadcastChannel for instant cross-tab and OBS communication
     const bc = new BroadcastChannel('yt_lets_watch_channel_v10');
 
@@ -235,14 +239,17 @@
       const urlParams = new URLSearchParams(window.location.search);
       if (urlParams.get('obs') === 'true') {
         document.body.classList.add('obs-mode');
+        isObserverMode = true;
       }
     }
 
     function toggleObsMode() {
       if (document.body.classList.contains('obs-mode')) {
         document.body.classList.remove('obs-mode');
+        isObserverMode = false;
       } else {
         document.body.classList.add('obs-mode');
+        isObserverMode = true;
       }
     }
 
@@ -458,6 +465,87 @@
       }
     }
 
+    // Initialize YouTube IFrame API to auto-advance when video ends
+    let tag = document.createElement('script');
+    tag.src = "https://www.youtube.com/iframe_api";
+    let firstScriptTag = document.getElementsByTagName('script')[0];
+    firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+
+    window.onYouTubeIframeAPIReady = function() {
+      // Ready callback
+      updatePlayerInstance();
+    };
+
+    let activeVideoId = null;
+
+    function updatePlayerInstance() {
+      const overlayIframe = document.getElementById('overlay-iframe');
+      const embedPlaceholder = document.getElementById('embed-placeholder');
+      
+      if (!state.current || !state.current.videoId) {
+        if (overlayIframe && embedPlaceholder) {
+          overlayIframe.src = "";
+          overlayIframe.classList.add('hidden');
+          embedPlaceholder.classList.remove('hidden');
+        }
+        activeVideoId = null;
+        if (player) {
+          try { player.destroy(); } catch(e) {}
+          player = null;
+        }
+        return;
+      }
+
+      if (activeVideoId === state.current.videoId && player) {
+        return; // Already playing this video
+      }
+
+      activeVideoId = state.current.videoId;
+      if (overlayIframe && embedPlaceholder) {
+        overlayIframe.classList.remove('hidden');
+        embedPlaceholder.classList.add('hidden');
+      }
+
+      if (window.YT && window.YT.Player) {
+        if (player) {
+          try {
+            player.loadVideoById(activeVideoId);
+            return;
+          } catch(e) {
+            try { player.destroy(); } catch(err) {}
+            player = null;
+          }
+        }
+
+        // Replace iframe with YouTube player instance for state detection (Ended = 0)
+        player = new YT.Player('overlay-iframe', {
+          videoId: activeVideoId,
+          playerVars: {
+            'autoplay': 1,
+            'controls': 1,
+            'enablejsapi': 1,
+            'rel': 0
+          },
+          events: {
+            'onStateChange': onPlayerStateChange
+          }
+        });
+      } else {
+        // Fallback if API hasn't loaded yet
+        if (overlayIframe) {
+          overlayIframe.src = `https://www.youtube-nocookie.com/embed/${activeVideoId}?autoplay=1&enablejsapi=1`;
+        }
+      }
+    }
+
+    function onPlayerStateChange(event) {
+      // YT.PlayerState.ENDED = 0
+      if (event.data === 0) {
+        // Automatically play the next video in queue!
+        playNext();
+      }
+    }
+
     function renderAll() {
       const controlList = document.getElementById('control-queue-list');
       const counterBadge = document.getElementById('queue-counter');
@@ -508,25 +596,15 @@
       const titleEl = document.getElementById('overlay-current-title');
       const creatorEl = document.getElementById('overlay-current-creator');
       const statusBadge = document.getElementById('player-status-badge');
-      const overlayIframe = document.getElementById('overlay-iframe');
-      const embedPlaceholder = document.getElementById('embed-placeholder');
       
       if (state.current) {
         if (titleEl) titleEl.innerText = state.current.title;
         if (creatorEl) creatorEl.innerText = state.current.creator;
         if (statusBadge) {
-          statusBadge.innerText = "Active";
+          statusBadge.innerText = "Auto-Queue Active";
           statusBadge.className = "text-[9px] bg-emerald-900/60 text-emerald-300 px-1.5 py-0.5 rounded font-mono";
         }
-        if (state.current.videoId && overlayIframe && embedPlaceholder) {
-          overlayIframe.src = `https://www.youtube-nocookie.com/embed/${state.current.videoId}?autoplay=1&mute=0&controls=1&enablejsapi=1`;
-          overlayIframe.classList.remove('hidden');
-          embedPlaceholder.classList.add('hidden');
-        } else if (overlayIframe && embedPlaceholder) {
-          overlayIframe.src = "";
-          overlayIframe.classList.add('hidden');
-          embedPlaceholder.classList.remove('hidden');
-        }
+        updatePlayerInstance();
       } else {
         if (titleEl) titleEl.innerText = "No video playing";
         if (creatorEl) creatorEl.innerText = "Waiting in queue";
@@ -534,11 +612,7 @@
           statusBadge.innerText = "Inactive";
           statusBadge.className = "text-[9px] bg-red-900/60 text-red-300 px-1.5 py-0.5 rounded font-mono";
         }
-        if (overlayIframe && embedPlaceholder) {
-          overlayIframe.src = "";
-          overlayIframe.classList.add('hidden');
-          embedPlaceholder.classList.remove('hidden');
-        }
+        updatePlayerInstance();
       }
 
       // Upcoming list inside overlay widget

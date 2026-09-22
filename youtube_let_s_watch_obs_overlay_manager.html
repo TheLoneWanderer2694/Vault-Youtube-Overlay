@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YouTube Let's Watch Overlay & Control Panel</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+  body {
+    font-family: 'Inter', sans-serif;
+  }
+  .glass-panel {
+    background: rgba(15, 23, 42, 0.88);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  /* Transparent background mode for OBS or query parameter */
+  body.obs-mode {
+    background-color: transparent !important;
+    padding: 0 !important;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: flex-start !important;
+  }
+  body.obs-mode .control-panel-container {
+    display: none !important;
+  }
+  body.obs-mode .overlay-container {
+    display: block !important;
+    width: 100% !important;
+    max-width: 420px !important;
+  }
+  /* Custom Scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+  }
+</style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen p-4 md:p-8 flex flex-col items-center justify-start">
+
+  <div class="control-panel-container w-full max-w-4xl mb-10 glass-panel rounded-2xl p-6 shadow-2xl">
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-800 pb-4 mb-6 gap-4">
+      <div>
+        <h1 class="text-2xl font-bold flex items-center gap-2 text-red-500">
+          <i class="fa-brands fa-youtube"></i> Let's Watch Manager
+        </h1>
+        <p class="text-sm text-slate-400">Add multiple links with creator tags. Format: <code class="text-blue-400">Youtuber Name | Link</code> or set the Creator override below.</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <button onclick="toggleObsMode()" class="bg-slate-800 hover:bg-slate-700 text-xs px-3 py-2 rounded-lg font-medium transition border border-slate-700 flex items-center gap-2">
+          <i class="fa-solid fa-eye"></i> Preview OBS Overlay Only
+        </button>
+        <button onclick="openCopyModal()" class="bg-red-600 hover:bg-red-500 text-xs px-3 py-2 rounded-lg font-medium transition flex items-center gap-2 text-white shadow-lg shadow-red-600/20">
+          <i class="fa-solid fa-link"></i> Get OBS Browser URL
+        </button>
+      </div>
+    </div>
+
+    <!-- Batch Link Input Section -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div class="md:col-span-2 space-y-4">
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
+            Paste YouTube Links (Supports <code class="text-blue-400 font-normal">Youtuber Name | https://...</code> per line)
+          </label>
+          <textarea id="batch-links-input" rows="4" placeholder="Markiplier | https://www.youtube.com/watch?v=dQw4w9WgXcQ&#10;Jacksepticeye | https://youtu.be/abc123xyz&#10;https://www.youtube.com/watch?v=regularlink" class="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-sm focus:outline-none focus:border-red-500 text-slate-200 placeholder-slate-600 font-mono"></textarea>
+        </div>
+        <div class="flex items-center gap-4">
+          <div class="flex-1">
+            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Default Creator Override (Applied if no pipe | is given)</label>
+            <input type="text" id="override-creator" placeholder="e.g. PewDiePie" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-red-500 text-slate-200 placeholder-slate-600">
+          </div>
+          <button onclick="addLinksToQueue()" class="self-end bg-red-600 hover:bg-red-500 text-white px-5 py-2.5 rounded-xl font-semibold text-sm transition shadow-lg shadow-red-600/30 flex items-center gap-2 h-[41px]">
+            <i class="fa-solid fa-plus"></i> Add to Queue
+          </button>
+        </div>
+      </div>
+
+      <!-- Quick Control Hub -->
+      <div class="bg-slate-900/60 border border-slate-800/80 rounded-xl p-4 flex flex-col justify-between">
+        <div>
+          <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">Queue Actions</h3>
+          <div class="space-y-2">
+            <button onclick="playNext()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs py-2 rounded-lg font-medium transition flex items-center justify-center gap-2">
+              <i class="fa-solid fa-forward-step"></i> Next Video in Queue
+            </button>
+            <button onclick="clearQueue()" class="w-full bg-slate-800 hover:bg-rose-900/40 hover:text-rose-400 text-slate-300 text-xs py-2 rounded-lg font-medium transition flex items-center justify-center gap-2 border border-slate-700">
+              <i class="fa-solid fa-trash-can"></i> Clear Entire Queue
+            </button>
+          </div>
+        </div>
+        <div class="mt-4 pt-4 border-t border-slate-800 text-xs text-slate-400 flex justify-between items-center">
+          <span>Queue Count:</span>
+          <span id="queue-counter" class="bg-slate-800 px-2.5 py-1 rounded-md font-bold text-slate-200">0 items</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Active Management List -->
+    <div class="mt-6 pt-6 border-t border-slate-800">
+      <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">Live Queue Manager</h3>
+      <div id="control-queue-list" class="space-y-2 max-h-60 overflow-y-auto pr-1">
+        <div class="text-xs text-slate-500 italic p-3 text-center bg-slate-900/40 rounded-lg">Queue is currently empty. Add links above!</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="overlay-container" class="overlay-container w-full max-w-[420px]">
+    <div class="glass-panel rounded-xl p-4 shadow-2xl border border-slate-700/50">
+      <!-- Header -->
+      <div class="flex items-center justify-between mb-3 border-b border-slate-800/80 pb-2.5">
+        <div class="flex items-center gap-2">
+          <span class="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></span>
+          <h2 class="text-xs font-bold uppercase tracking-wider text-slate-300">Let's Watch Queue</h2>
+        </div>
+        <span id="overlay-count" class="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded font-medium">0 upcoming</span>
+      </div>
+
+      <!-- Now Playing Box -->
+      <div class="mb-3 bg-gradient-to-r from-red-950/40 to-slate-900/80 border border-red-500/30 rounded-lg p-3">
+        <div class="text-[10px] font-semibold text-red-400 uppercase tracking-wider mb-1 flex items-center justify-between">
+          <span class="flex items-center gap-1.5"><i class="fa-solid fa-play text-[8px]"></i> Now Watching</span>
+          <span id="player-status-badge" class="text-[9px] bg-red-900/60 text-red-300 px-1.5 py-0.2 rounded font-mono">Inactive</span>
+        </div>
+        
+        <!-- YouTuber Name Display -->
+        <div class="mb-1.5 flex items-center gap-2">
+          <span class="bg-blue-600/20 text-blue-400 border border-blue-500/30 text-xs px-2 py-0.5 rounded-full font-semibold flex items-center gap-1">
+            <i class="fa-solid fa-user-tag text-[10px]"></i> <span id="overlay-current-creator">No YouTuber assigned</span>
+          </span>
+        </div>
+
+        <div id="overlay-current-title" class="text-sm font-semibold text-white truncate mb-2.5">Waiting for selection...</div>
+        
+        <!-- Embedded Video Preview Container -->
+        <div class="relative w-full pt-[56.25%] bg-black/60 rounded-lg overflow-hidden border border-slate-800 shadow-inner">
+          <div id="video-embed-container" class="absolute inset-0 w-full h-full flex items-center justify-center text-slate-500 text-xs">
+            <div class="text-center p-4">
+              <i class="fa-brands fa-youtube text-2xl text-slate-600 mb-1 block"></i>
+              <span>No video preview loaded</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Upcoming Queue List -->
+      <div class="space-y-1.5 max-h-[220px] overflow-y-auto pr-1" id="overlay-upcoming-list">
+        <div class="text-xs text-slate-500 italic text-center py-3">Queue is empty</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- OBS URL Instructions Modal -->
+  <div id="url-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 opacity-0 pointer-events-none transition-all duration-200">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
+      <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+        <h3 class="text-base font-bold text-white flex items-center gap-2">
+          <i class="fa-solid fa-link text-red-500"></i> How to link this to OBS
+        </h3>
+        <button onclick="closeCopyModal()" class="text-slate-400 hover:text-white transition">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+      <p class="text-xs text-slate-300 leading-relaxed">
+        Because this is a local control panel file, OBS cannot read temporary browser preview URLs (`blob:` or `about:blank`). Instead, use one of these two bulletproof methods:
+      </p>
+
+      <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3.5 space-y-3">
+        <div class="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
+          <i class="fa-solid fa-circle-check"></i> Method A: OBS "Local File" Checkbox (Recommended)
+        </div>
+        <ol class="text-[11px] text-slate-300 space-y-1 list-decimal list-inside pl-1">
+          <div>In OBS, add a new <strong>Browser Source</strong>.</div>
+          <div>Check the box for <strong>Local file</strong>.</div>
+          <div>Click <strong>Browse</strong> and select your saved <code class="text-red-400">youtube_lets_watch_overlay.html</code> file directly from your computer!</div>
+          <div>Set Width to <code class="text-blue-400">420</code> and Height to <code class="text-blue-400">600</code>.</div>
+        </ol>
+      </div>
+
+      <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3.5 space-y-2">
+        <div class="text-xs font-bold text-blue-400 flex items-center gap-1.5">
+          <i class="fa-solid fa-file-arrow-down"></i> Method B: Using your File Path URL
+        </div>
+        <p class="text-[11px] text-slate-400">If you prefer pasting a URL, copy your file path below and add <code class="text-amber-400">?obs=true</code> to the very end:</p>
+        <div class="flex items-center gap-2">
+          <input type="text" id="obs-url-field" readonly class="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-2 text-[11px] text-slate-200 font-mono select-all focus:outline-none" onclick="this.select()">
+          <button onclick="copyModalUrl()" class="bg-red-600 hover:bg-red-500 text-white text-xs px-3 py-2 rounded-lg font-medium shrink-0 transition">Copy</button>
+        </div>
+      </div>
+
+      <div class="flex justify-end pt-1">
+        <button onclick="closeCopyModal()" class="bg-slate-800 hover:bg-slate-700 text-xs px-4 py-2 rounded-xl text-slate-300 font-medium transition">Got it</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast notification element -->
+  <div id="toast" class="fixed bottom-6 right-6 bg-slate-900 text-white border border-slate-700 px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 transform translate-y-20 opacity-0 transition-all duration-300 z-50 pointer-events-none">
+    <i class="fa-solid fa-circle-check text-emerald-400 text-lg"></i>
+    <div>
+      <div id="toast-title" class="text-xs font-bold">Link Copied!</div>
+      <div id="toast-msg" class="text-[11px] text-slate-400">URL successfully copied to clipboard.</div>
+    </div>
+  </div>
+
+  <script>
+    let state = {
+      current: null,
+      queue: []
+    };
+
+    function checkObsQueryParam() {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('obs') === 'true' || window.location.protocol === 'file:') {
+        // If loaded via file:// protocol directly or with ?obs=true, auto-enable obs mode
+        if (urlParams.get('obs') === 'true' || window.location.href.includes('youtube_lets_watch_overlay.html')) {
+          // Check if we are running standalone as the overlay source
+          // If the user wants the control panel, they can use regular browser, but in OBS local file mode we show only overlay
+          if (window.location.search.includes('obs=true') || window.location.protocol === 'file:') {
+            // Optional: let user toggle, but file:// in OBS acts as overlay widget automatically if desired or they can use local file checkbox
+          }
+        }
+      }
+      if (urlParams.get('obs') === 'true') {
+        document.body.classList.add('obs-mode');
+      }
+    }
+
+    function loadState() {
+      const saved = localStorage.getItem('yt_lets_watch_state_v3');
+      if (saved) {
+        try {
+          state = JSON.parse(saved);
+        } catch(e) { console.error(e); }
+      }
+    }
+
+    function saveState() {
+      localStorage.setItem('yt_lets_watch_state_v3', JSON.stringify(state));
+      renderAll();
+    }
+
+    function extractVideoId(url) {
+      const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+      const match = url.match(regExp);
+      return (match && match[2].length === 11) ? match[2] : null;
+    }
+
+    async function fetchVideoDetails(url, fallbackCreator = "") {
+      const videoId = extractVideoId(url);
+      if (!videoId) {
+        return { 
+          id: Math.random().toString(36).substring(2, 9),
+          title: url, 
+          creator: fallbackCreator || "Featured Creator", 
+          url: url,
+          videoId: null
+        };
+      }
+
+      let creatorName = fallbackCreator;
+      let videoTitle = `YouTube Video (${videoId})`;
+
+      try {
+        const response = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.title) videoTitle = data.title;
+          if (!creatorName && data.author_name) {
+            creatorName = data.author_name;
+          }
+        }
+      } catch (err) {
+        console.warn("oembed restricted or failed", err);
+      }
+
+      if (!creatorName || creatorName.toLowerCase() === "unknown youtuber") {
+        creatorName = "Featured Creator";
+      }
+
+      return {
+        id: Math.random().toString(36).substring(2, 9),
+        title: videoTitle,
+        creator: creatorName,
+        url: url,
+        videoId: videoId
+      };
+    }
+
+    async function addLinksToQueue() {
+      const inputEl = document.getElementById('batch-links-input');
+      const creatorEl = document.getElementById('override-creator');
+      const inputVal = inputEl ? inputEl.value.trim() : '';
+      const defaultOverride = creatorEl ? creatorEl.value.trim() : '';
+      if (!inputVal) return;
+
+      const lines = inputVal.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+      
+      const btn = event ? event.currentTarget : null;
+      let originalText = "";
+      if (btn) {
+        originalText = btn.innerHTML;
+        btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> Processing...`;
+        btn.disabled = true;
+      }
+
+      for (const line of lines) {
+        let targetUrl = line;
+        let lineCreator = defaultOverride;
+
+        if (line.includes('|')) {
+          const parts = line.split('|');
+          lineCreator = parts[0].trim();
+          targetUrl = parts.slice(1).join('|').trim();
+        } else if (line.includes(' - http')) {
+          const idx = line.indexOf(' - http');
+          lineCreator = line.substring(0, idx).trim();
+          targetUrl = line.substring(idx + 3).trim();
+        }
+
+        const details = await fetchVideoDetails(targetUrl, lineCreator);
+
+        if (!state.current && state.queue.length === 0) {
+          state.current = details;
+        } else {
+          state.queue.push(details);
+        }
+      }
+
+      if (inputEl) inputEl.value = '';
+      if (creatorEl) creatorEl.value = '';
+      if (btn) {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+      }
+
+      saveState();
+    }
+
+    function playNext() {
+      if (state.queue.length > 0) {
+        state.current = state.queue.shift();
+      } else {
+        state.current = null;
+      }
+      saveState();
+    }
+
+    function removeItem(index) {
+      state.queue.splice(index, 1);
+      saveState();
+    }
+
+    function clearQueue() {
+      const confirmed = window.confirm ? window.confirm("Are you sure you want to clear the entire queue and current video?") : true;
+      if (confirmed) {
+        state.current = null;
+        state.queue = [];
+        saveState();
+      }
+    }
+
+    function jumpToItem(index) {
+      const target = state.queue.splice(index, 1)[0];
+      if (state.current) {
+        state.queue.unshift(state.current);
+      }
+      state.current = target;
+      saveState();
+    }
+
+    function showToast(title, message) {
+      const toast = document.getElementById('toast');
+      const tTitle = document.getElementById('toast-title');
+      const tMsg = document.getElementById('toast-msg');
+      if (toast && tTitle && tMsg) {
+        tTitle.innerText = title;
+        tMsg.innerText = message;
+        toast.classList.remove('translate-y-20', 'opacity-0', 'pointer-events-none');
+        toast.classList.add('translate-y-0', 'opacity-100');
+        setTimeout(() => {
+          toast.classList.remove('translate-y-0', 'opacity-100');
+          toast.classList.add('translate-y-20', 'opacity-0', 'pointer-events-none');
+        }, 4000);
+      }
+    }
+
+    function openCopyModal() {
+      const modal = document.getElementById('url-modal');
+      const field = document.getElementById('obs-url-field');
+      if (modal && field) {
+        let loc = window.location.href.split('?')[0];
+        if (!loc.startsWith('file://') && !loc.startsWith('http')) {
+          loc = 'file:///' + loc.replace(/\\/g, '/');
+        }
+        field.value = loc + '?obs=true';
+        modal.classList.remove('opacity-0', 'pointer-events-none');
+        modal.classList.add('opacity-100');
+        field.focus();
+        field.select();
+      }
+    }
+
+    function closeCopyModal() {
+      const modal = document.getElementById('url-modal');
+      if (modal) {
+        modal.classList.remove('opacity-100');
+        modal.classList.add('opacity-0', 'pointer-events-none');
+      }
+    }
+
+    function copyModalUrl() {
+      const field = document.getElementById('obs-url-field');
+      if (!field) return;
+
+      field.select();
+      field.setSelectionRange(0, 99999);
+
+      try {
+        const successful = document.execCommand('copy');
+        if (successful) {
+          showToast("Link Copied!", "Paste this into your OBS Browser Source.");
+          closeCopyModal();
+          return;
+        }
+      } catch (err) {}
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(field.value).then(() => {
+          showToast("Link Copied!", "Paste this into your OBS Browser Source.");
+          closeCopyModal();
+        }).catch(() => {
+          prompt("Copy this file path URL manually for OBS:", field.value);
+        });
+      } else {
+        prompt("Copy this file path URL manually for OBS:", field.value);
+      }
+    }
+
+    function renderAll() {
+      const controlList = document.getElementById('control-queue-list');
+      const counterBadge = document.getElementById('queue-counter');
+      if (counterBadge) {
+        counterBadge.innerText = `${state.queue.length + (state.current ? 1 : 0)} items`;
+      }
+
+      if (controlList) {
+        if (!state.current && state.queue.length === 0) {
+          controlList.innerHTML = `<div class="text-xs text-slate-500 italic p-3 text-center bg-slate-900/40 rounded-lg">Queue is currently empty. Add links above!</div>`;
+        } else {
+          let html = '';
+          if (state.current) {
+            html += `
+              <div class="flex items-center justify-between bg-red-950/30 border border-red-500/30 p-2.5 rounded-lg text-xs">
+                <div class="flex items-center gap-2 truncate">
+                  <span class="bg-red-600 text-white text-[10px] px-1.5 py-0.5 rounded font-bold uppercase shrink-0">Playing</span>
+                  <span class="text-blue-400 font-semibold shrink-0">[${state.current.creator}]</span>
+                  <span class="font-medium text-white truncate">${state.current.title}</span>
+                </div>
+                <span class="text-slate-500 text-[10px] shrink-0 ml-2">Active</span>
+              </div>
+            `;
+          }
+          state.queue.forEach((item, idx) => {
+            html += `
+              <div class="flex items-center justify-between bg-slate-900/80 border border-slate-800 p-2.5 rounded-lg text-xs">
+                <div class="flex items-center gap-2 truncate">
+                  <span class="bg-slate-800 text-slate-400 text-[10px] px-1.5 py-0.5 rounded font-mono shrink-0">#${idx + 1}</span>
+                  <span class="text-blue-400/90 font-medium shrink-0">[${item.creator}]</span>
+                  <span class="text-slate-200 truncate">${item.title}</span>
+                </div>
+                <div class="flex items-center gap-1.5 shrink-0 ml-2">
+                  <button onclick="jumpToItem(${idx})" title="Play Now" class="bg-slate-800 hover:bg-emerald-600 hover:text-white px-2 py-1 rounded text-slate-300 transition"><i class="fa-solid fa-play"></i></button>
+                  <button onclick="removeItem(${idx})" title="Remove" class="bg-slate-800 hover:bg-rose-600 hover:text-white px-2 py-1 rounded text-slate-300 transition"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+              </div>
+            `;
+          });
+          controlList.innerHTML = html;
+        }
+      }
+
+      // OBS Overlay Elements
+      const overlayCount = document.getElementById('overlay-count');
+      if (overlayCount) overlayCount.innerText = `${state.queue.length} upcoming`;
+      
+      const titleEl = document.getElementById('overlay-current-title');
+      const creatorEl = document.getElementById('overlay-current-creator');
+      const embedContainer = document.getElementById('video-embed-container');
+      const statusBadge = document.getElementById('player-status-badge');
+      
+      if (state.current) {
+        if (titleEl) titleEl.innerText = state.current.title;
+        if (creatorEl) creatorEl.innerText = state.current.creator;
+        if (statusBadge) {
+          statusBadge.innerText = "Active";
+          statusBadge.className = "text-[9px] bg-emerald-900/60 text-emerald-300 px-1.5 py-0.2 rounded font-mono";
+        }
+        
+        if (embedContainer) {
+          if (state.current.videoId) {
+            embedContainer.innerHTML = `
+              <iframe 
+                class="w-full h-full" 
+                src="https://www.youtube-nocookie.com/embed/${state.current.videoId}?autoplay=1&enablejsapi=1" 
+                title="YouTube video player" 
+                frameborder="0" 
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+                allowfullscreen>
+              </iframe>
+            `;
+          } else {
+            embedContainer.innerHTML = `
+              <div class="text-center p-4 text-slate-400 text-xs">
+                <i class="fa-solid fa-circle-exclamation text-amber-500 mb-1 block"><span>Direct embed unavailable</span></i>
+              </div>
+            `;
+          }
+        }
+      } else {
+        if (titleEl) titleEl.innerText = "No video playing";
+        if (creatorEl) creatorEl.innerText = "Waiting in queue";
+        if (statusBadge) {
+          statusBadge.innerText = "Inactive";
+          statusBadge.className = "text-[9px] bg-red-900/60 text-red-300 px-1.5 py-0.2 rounded font-mono";
+        }
+        if (embedContainer) {
+          embedContainer.innerHTML = `
+            <div class="text-center p-4">
+              <i class="fa-brands fa-youtube text-2xl text-slate-600 mb-1 block"></i>
+              <span>No video preview loaded</span>
+            </div>
+          `;
+        }
+      }
+
+      // Upcoming list inside overlay widget
+      const overlayUpcoming = document.getElementById('overlay-upcoming-list');
+      if (overlayUpcoming) {
+        if (state.queue.length === 0) {
+          overlayUpcoming.innerHTML = `<div class="text-[11px] text-slate-500 italic text-center py-2">Queue is empty</div>`;
+        } else {
+          let upcomingHtml = '';
+          state.queue.forEach((item, idx) => {
+            upcomingHtml += `
+              <div class="bg-slate-900/60 border border-slate-800/60 rounded p-2 text-xs flex flex-col gap-1">
+                <div class="text-[10px] flex justify-between items-center">
+                  <span class="font-mono text-red-400">#${idx + 1}</span>
+                  <span class="text-blue-400 font-semibold bg-blue-950/50 px-1.5 py-0.5 rounded flex items-center gap-1">
+                    <i class="fa-solid fa-user text-[8px]"></i> ${item.creator}
+                  </span>
+                </div>
+                <div class="text-slate-200 text-xs font-medium truncate">${item.title}</span></div>
+              </div>
+            `;
+          });
+          overlayUpcoming.innerHTML = upcomingHtml;
+        }
+      }
+    }
+
+    function toggleObsMode() {
+      document.body.classList.toggle('obs-mode');
+    }
+
+    window.addEventListener('storage', (e) => {
+      if (e.key === 'yt_lets_watch_state_v3') {
+        loadState();
+        renderAll();
+      }
+    });
+
+    window.onload = function() {
+      checkObsQueryParam();
+      loadState();
+      renderAll();
+      setInterval(() => {
+        const saved = localStorage.getItem('yt_lets_watch_state_v3');
+        if (saved) {
+          try {
+            const parsed = JSON.parse(saved);
+            if (JSON.stringify(parsed) !== JSON.stringify(state)) {
+              state = parsed;
+              renderAll();
+            }
+          } catch(e) {}
+        }
+      }, 1000);
+    };
+  </script>
+
+</body>
+</html>

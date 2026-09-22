@@ -231,6 +231,7 @@
     bc.onmessage = (event) => {
       if (event.data && event.data.type === 'STATE_UPDATE') {
         state = event.data.state;
+        autoPromoteQueue();
         renderAll();
       }
     };
@@ -260,12 +261,20 @@
           state = JSON.parse(saved);
         } catch(e) { console.error(e); }
       }
+      autoPromoteQueue();
     }
 
     function saveState() {
+      autoPromoteQueue();
       localStorage.setItem('yt_lets_watch_state_v10', JSON.stringify(state));
       bc.postMessage({ type: 'STATE_UPDATE', state: state });
       renderAll();
+    }
+
+    function autoPromoteQueue() {
+      if (!state.current && state.queue.length > 0) {
+        state.current = state.queue.shift();
+      }
     }
 
     function extractVideoId(url) {
@@ -472,7 +481,6 @@
     firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
 
     window.onYouTubeIframeAPIReady = function() {
-      // Ready callback
       updatePlayerInstance();
     };
 
@@ -497,7 +505,7 @@
       }
 
       if (activeVideoId === state.current.videoId && player) {
-        return; // Already playing this video
+        return;
       }
 
       activeVideoId = state.current.videoId;
@@ -517,7 +525,6 @@
           }
         }
 
-        // Replace iframe with YouTube player instance for state detection (Ended = 0)
         player = new YT.Player('overlay-iframe', {
           videoId: activeVideoId,
           playerVars: {
@@ -531,7 +538,6 @@
           }
         });
       } else {
-        // Fallback if API hasn't loaded yet
         if (overlayIframe) {
           overlayIframe.src = `https://www.youtube-nocookie.com/embed/${activeVideoId}?autoplay=1&enablejsapi=1`;
         }
@@ -539,14 +545,13 @@
     }
 
     function onPlayerStateChange(event) {
-      // YT.PlayerState.ENDED = 0
       if (event.data === 0) {
-        // Automatically play the next video in queue!
         playNext();
       }
     }
 
     function renderAll() {
+      autoPromoteQueue();
       const controlList = document.getElementById('control-queue-list');
       const counterBadge = document.getElementById('queue-counter');
       if (counterBadge) {
@@ -589,7 +594,6 @@
         }
       }
 
-      // OBS Overlay Elements
       const overlayCount = document.getElementById('overlay-count');
       if (overlayCount) overlayCount.innerText = `${state.queue.length} upcoming`;
       
@@ -615,7 +619,6 @@
         updatePlayerInstance();
       }
 
-      // Upcoming list inside overlay widget
       const overlayUpcoming = document.getElementById('overlay-upcoming-list');
       if (overlayUpcoming) {
         if (state.queue.length === 0) {

@@ -12,11 +12,11 @@
     font-family: 'Inter', sans-serif;
   }
   .glass-panel {
-    background: rgba(15, 23, 42, 0.88);
+    background: rgba(15, 23, 42, 0.92);
     backdrop-filter: blur(12px);
     border: 1px solid rgba(255, 255, 255, 0.1);
   }
-  /* Transparent background mode for OBS or query parameter */
+  /* Transparent background mode for OBS */
   body.obs-mode {
     background-color: transparent !important;
     padding: 0 !important;
@@ -32,7 +32,6 @@
     width: 100% !important;
     max-width: 420px !important;
   }
-  /* Custom Scrollbar */
   ::-webkit-scrollbar {
     width: 6px;
   }
@@ -91,7 +90,7 @@
         <div>
           <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">Queue Actions</h3>
           <div class="space-y-2">
-            <button onclick="playNext()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs py-2 rounded-lg font-medium transition flex items-center justify-center gap-2">
+            <button onclick="playNext()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs py-2 rounded-lg font-medium transition flex items-center justify-center gap-2 shadow">
               <i class="fa-solid fa-forward-step"></i> Next Video in Queue
             </button>
             <button onclick="clearQueue()" class="w-full bg-slate-800 hover:bg-rose-900/40 hover:text-rose-400 text-slate-300 text-xs py-2 rounded-lg font-medium transition flex items-center justify-center gap-2 border border-slate-700">
@@ -116,7 +115,7 @@
   </div>
 
   <div id="overlay-container" class="overlay-container w-full max-w-[420px]">
-    <div class="glass-panel rounded-xl p-4 shadow-2xl border border-slate-700/50">
+    <div class="glass-panel rounded-2xl p-4 shadow-2xl border border-slate-700/60">
       <!-- Header -->
       <div class="flex items-center justify-between mb-3 border-b border-slate-800/80 pb-2.5">
         <div class="flex items-center gap-2">
@@ -127,31 +126,30 @@
       </div>
 
       <!-- Now Playing Box -->
-      <div class="mb-3 bg-gradient-to-r from-red-950/40 to-slate-900/80 border border-red-500/30 rounded-lg p-3">
-        <div class="text-[10px] font-semibold text-red-400 uppercase tracking-wider mb-1 flex items-center justify-between">
+      <div class="mb-3 bg-gradient-to-r from-red-950/40 to-slate-900/80 border border-red-500/30 rounded-xl p-3">
+        <div class="text-[10px] font-semibold text-red-400 uppercase tracking-wider mb-1.5 flex items-center justify-between">
           <span class="flex items-center gap-1.5"><i class="fa-solid fa-play text-[8px]"></i> Now Watching</span>
-          <span id="player-status-badge" class="text-[9px] bg-red-900/60 text-red-300 px-1.5 py-0.2 rounded font-mono">Inactive</span>
+          <span id="player-status-badge" class="text-[9px] bg-red-900/60 text-red-300 px-1.5 py-0.5 rounded font-mono">Inactive</span>
         </div>
         
         <!-- YouTuber Name Display -->
-        <div class="mb-1.5 flex items-center gap-2">
-          <span class="bg-blue-600/20 text-blue-400 border border-blue-500/30 text-xs px-2 py-0.5 rounded-full font-semibold flex items-center gap-1">
-            <i class="fa-solid fa-user-tag text-[10px]"></i> <span id="overlay-current-creator">No YouTuber assigned</span>
+        <div class="mb-2 flex items-center gap-2">
+          <span class="bg-blue-600/20 text-blue-400 border border-blue-500/30 text-xs px-2.5 py-1 rounded-full font-semibold flex items-center gap-1.5 shadow-sm">
+            <i class="fa-solid fa-user-tag text-[11px]"></i> <span id="overlay-current-creator">No YouTuber assigned</span>
           </span>
         </div>
 
         <div id="overlay-current-title" class="text-sm font-semibold text-white truncate mb-2.5">Waiting for selection...</div>
         
-        <!-- Embedded Video Preview Container with Single YouTube IFrame Instance -->
-        <div class="relative w-full pt-[56.25%] bg-black/80 rounded-lg overflow-hidden border border-slate-800 shadow-inner">
-          <div id="youtube-player-host" class="absolute inset-0 w-full h-full flex items-center justify-center">
-            <!-- Stable target element replaced securely by YouTube API -->
-            <div id="youtube-player" class="w-full h-full"></div>
-          </div>
-          <div id="video-placeholder" class="absolute inset-0 w-full h-full flex items-center justify-center text-slate-500 text-xs bg-slate-950 z-10">
-            <div class="text-center p-4">
-              <i class="fa-brands fa-youtube text-2xl text-slate-600 mb-1 block"></i>
-              <span>No video preview loaded</span>
+        <!-- Reliable Thumbnail Display Container -->
+        <div class="relative w-full pt-[56.25%] bg-black/90 rounded-lg overflow-hidden border border-slate-800 shadow-inner group">
+          <div id="thumbnail-container" class="absolute inset-0 w-full h-full flex items-center justify-center">
+            <img id="overlay-thumbnail" src="" alt="Thumbnail" class="w-full h-full object-cover hidden">
+            <div id="thumbnail-placeholder" class="absolute inset-0 w-full h-full flex items-center justify-center text-slate-500 text-xs bg-slate-950">
+              <div class="text-center p-4">
+                <i class="fa-brands fa-youtube text-2xl text-slate-600 mb-1 block"></i>
+                <span>No video loaded</span>
+              </div>
             </div>
           </div>
         </div>
@@ -176,7 +174,7 @@
         </button>
       </div>
       <p class="text-xs text-slate-300 leading-relaxed">
-        Because this is a local control panel file, OBS cannot read temporary browser preview URLs (`blob:` or `about:blank`). Instead, use one of these two bulletproof methods:
+        To display this seamlessly in OBS without embedding errors, use one of these bulletproof methods:
       </p>
 
       <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3.5 space-y-3">
@@ -223,88 +221,6 @@
       queue: []
     };
 
-    let ytPlayer = null;
-    let apiReady = false;
-
-    // Load YouTube IFrame API asynchronously once
-    const tag = document.createElement('script');
-    tag.src = "https://www.youtube.com/iframe_api";
-    const firstScriptTag = document.getElementsByTagName('script')[0];
-    firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
-
-    function onYouTubeIframeAPIReady() {
-      apiReady = true;
-      initPlayerIfReady();
-    }
-
-    function initPlayerIfReady() {
-      if (!apiReady) return;
-      const videoId = (state.current && state.current.videoId) ? state.current.videoId : '';
-      
-      const placeholder = document.getElementById('video-placeholder');
-      if (videoId) {
-        if (placeholder) placeholder.style.display = 'none';
-      } else {
-        if (placeholder) {
-          placeholder.style.display = 'flex';
-          placeholder.innerHTML = `<div class="text-center p-4"><i class="fa-brands fa-youtube text-2xl text-slate-600 mb-1 block"></i><span>No video preview loaded</span></div>`;
-        }
-        if (ytPlayer && typeof ytPlayer.stopVideo === 'function') {
-          try { ytPlayer.stopVideo(); } catch(e) {}
-        }
-        return;
-      }
-
-      if (ytPlayer && typeof ytPlayer.loadVideoById === 'function') {
-        try {
-          ytPlayer.loadVideoById(videoId);
-        } catch(e) {
-          createPlayerInstance(videoId);
-        }
-      } else {
-        createPlayerInstance(videoId);
-      }
-    }
-
-    function createPlayerInstance(videoId) {
-      try {
-        const host = document.getElementById('youtube-player-host');
-        if (!host) return;
-        
-        // Cleanly ensure only single element placeholder exists for YT Player API injection
-        host.innerHTML = '<div id="youtube-player" class="w-full h-full"></div>';
-
-        ytPlayer = new YT.Player('youtube-player', {
-          height: '100%',
-          width: '100%',
-          videoId: videoId,
-          playerVars: {
-            'autoplay': 1,
-            'controls': 1,
-            'enablejsapi': 1,
-            'origin': window.location.origin
-          },
-          events: {
-            'onReady': (event) => {
-              const placeholder = document.getElementById('video-placeholder');
-              if (placeholder) placeholder.style.display = 'none';
-              event.target.playVideo();
-            },
-            'onError': (e) => {
-              console.warn("YouTube Player error code:", e.data);
-              const placeholder = document.getElementById('video-placeholder');
-              if (placeholder) {
-                placeholder.innerHTML = `<div class="text-center p-4 text-xs text-amber-400"><i class="fa-solid fa-triangle-exclamation mb-1 block text-base"></i>Embedding restricted by creator</div>`;
-                placeholder.style.display = 'flex';
-              }
-            }
-          }
-        });
-      } catch(err) {
-        console.error("Error creating YT Player:", err);
-      }
-    }
-
     function checkObsQueryParam() {
       const urlParams = new URLSearchParams(window.location.search);
       if (urlParams.get('obs') === 'true') {
@@ -312,8 +228,16 @@
       }
     }
 
+    function toggleObsMode() {
+      if (document.body.classList.contains('obs-mode')) {
+        document.body.classList.remove('obs-mode');
+      } else {
+        document.body.classList.add('obs-mode');
+      }
+    }
+
     function loadState() {
-      const saved = localStorage.getItem('yt_lets_watch_state_v5');
+      const saved = localStorage.getItem('yt_lets_watch_state_v7');
       if (saved) {
         try {
           state = JSON.parse(saved);
@@ -322,7 +246,7 @@
     }
 
     function saveState() {
-      localStorage.setItem('yt_lets_watch_state_v5', JSON.stringify(state));
+      localStorage.setItem('yt_lets_watch_state_v7', JSON.stringify(state));
       renderAll();
     }
 
@@ -340,7 +264,8 @@
           title: url, 
           creator: fallbackCreator || "Featured Creator", 
           url: url,
-          videoId: null
+          videoId: null,
+          thumbnail: null
         };
       }
 
@@ -357,7 +282,7 @@
           }
         }
       } catch (err) {
-        console.warn("oembed restricted or failed", err);
+        console.warn("oembed lookup skipped or restricted", err);
       }
 
       if (!creatorName || creatorName.toLowerCase() === "unknown youtuber") {
@@ -369,7 +294,8 @@
         title: videoTitle,
         creator: creatorName,
         url: url,
-        videoId: videoId
+        videoId: videoId,
+        thumbnail: `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`
       };
     }
 
@@ -442,9 +368,6 @@
       if (confirmed) {
         state.current = null;
         state.queue = [];
-        if (ytPlayer && typeof ytPlayer.stopVideo === 'function') {
-          ytPlayer.stopVideo();
-        }
         saveState();
       }
     }
@@ -576,29 +499,34 @@
       const titleEl = document.getElementById('overlay-current-title');
       const creatorEl = document.getElementById('overlay-current-creator');
       const statusBadge = document.getElementById('player-status-badge');
+      const thumbnailImg = document.getElementById('overlay-thumbnail');
+      const thumbnailPlaceholder = document.getElementById('thumbnail-placeholder');
       
       if (state.current) {
         if (titleEl) titleEl.innerText = state.current.title;
         if (creatorEl) creatorEl.innerText = state.current.creator;
         if (statusBadge) {
           statusBadge.innerText = "Active";
-          statusBadge.className = "text-[9px] bg-emerald-900/60 text-emerald-300 px-1.5 py-0.2 rounded font-mono";
+          statusBadge.className = "text-[9px] bg-emerald-900/60 text-emerald-300 px-1.5 py-0.5 rounded font-mono";
         }
-        initPlayerIfReady();
+        if (state.current.thumbnail && thumbnailImg && thumbnailPlaceholder) {
+          thumbnailImg.src = state.current.thumbnail;
+          thumbnailImg.classList.remove('hidden');
+          thumbnailPlaceholder.classList.add('hidden');
+        } else if (thumbnailImg && thumbnailPlaceholder) {
+          thumbnailImg.classList.add('hidden');
+          thumbnailPlaceholder.classList.remove('hidden');
+        }
       } else {
         if (titleEl) titleEl.innerText = "No video playing";
         if (creatorEl) creatorEl.innerText = "Waiting in queue";
         if (statusBadge) {
           statusBadge.innerText = "Inactive";
-          statusBadge.className = "text-[9px] bg-red-900/60 text-red-300 px-1.5 py-0.2 rounded font-mono";
+          statusBadge.className = "text-[9px] bg-red-900/60 text-red-300 px-1.5 py-0.5 rounded font-mono";
         }
-        const placeholder = document.getElementById('video-placeholder');
-        if (placeholder) {
-          placeholder.style.display = 'flex';
-          placeholder.innerHTML = `<div class="text-center p-4"><i class="fa-brands fa-youtube text-2xl text-slate-600 mb-1 block"></i><span>No video preview loaded</span></div>`;
-        }
-        if (ytPlayer && typeof ytPlayer.stopVideo === 'function') {
-          try { ytPlayer.stopVideo(); } catch(e) {}
+        if (thumbnailImg && thumbnailPlaceholder) {
+          thumbnailImg.classList.add('hidden');
+          thumbnailPlaceholder.classList.remove('hidden');
         }
       }
 
@@ -618,7 +546,7 @@
                     <i class="fa-solid fa-user text-[8px]"></i> ${item.creator}
                   </span>
                 </div>
-                <div class="text-slate-200 text-xs font-medium truncate">${item.title}</span></div>
+                <div class="text-slate-200 text-xs font-medium truncate">${item.title}</div>
               </div>
             `;
           });
@@ -627,35 +555,18 @@
       }
     }
 
-    function toggleObsMode() {
-      document.body.classList.toggle('obs-mode');
-    }
+    window.addEventListener('DOMContentLoaded', () => {
+      checkObsQueryParam();
+      loadState();
+      renderAll();
+    });
 
     window.addEventListener('storage', (e) => {
-      if (e.key === 'yt_lets_watch_state_v5') {
+      if (e.key === 'yt_lets_watch_state_v7') {
         loadState();
         renderAll();
       }
     });
-
-    window.onload = function() {
-      checkObsQueryParam();
-      loadState();
-      renderAll();
-      setInterval(() => {
-        const saved = localStorage.getItem('yt_lets_watch_state_v5');
-        if (saved) {
-          try {
-            const parsed = JSON.parse(saved);
-            if (JSON.stringify(parsed) !== JSON.stringify(state)) {
-              state = parsed;
-              renderAll();
-            }
-          } catch(e) {}
-        }
-      }, 1000);
-    };
   </script>
-
 </body>
 </html>

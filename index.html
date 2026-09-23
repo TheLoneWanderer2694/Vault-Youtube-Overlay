@@ -16,7 +16,6 @@
     backdrop-filter: blur(12px);
     border: 1px solid rgba(255, 255, 255, 0.1);
   }
-  /* Transparent background mode for OBS */
   body.obs-mode {
     background-color: transparent !important;
     padding: 0 !important;
@@ -144,7 +143,6 @@
         <!-- Embed Player Container -->
         <div class="relative w-full pt-[56.25%] bg-black/90 rounded-lg overflow-hidden border border-slate-800 shadow-inner group">
           <div id="embed-container" class="absolute inset-0 w-full h-full flex items-center justify-center">
-            <!-- YouTube iframe with enablejsapi=1 for tracking state events -->
             <iframe id="overlay-iframe" src="" class="w-full h-full border-0 hidden" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
             <div id="embed-placeholder" class="absolute inset-0 w-full h-full flex items-center justify-center text-slate-500 text-xs bg-slate-950">
               <div class="text-center p-4">
@@ -163,38 +161,26 @@
     </div>
   </div>
 
-  <!-- OBS URL Instructions Modal -->
+  <!-- OBS URL Generator Modal -->
   <div id="url-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 opacity-0 pointer-events-none transition-all duration-200">
     <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
       <div class="flex justify-between items-center border-b border-slate-800 pb-3">
         <h3 class="text-base font-bold text-white flex items-center gap-2">
-          <i class="fa-solid fa-link text-red-500"></i> How to link this to OBS
+          <i class="fa-solid fa-link text-red-500"></i> OBS Browser Source URL Generator
         </h3>
         <button onclick="closeCopyModal()" class="text-slate-400 hover:text-white transition">
           <i class="fa-solid fa-xmark text-lg"></i>
         </button>
       </div>
       <p class="text-xs text-slate-300 leading-relaxed">
-        To display this seamlessly in OBS without embedding errors, use one of these bulletproof methods:
+        Because local files block YouTube embeds, click the button below to generate a working URL instantly:
       </p>
 
       <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3.5 space-y-3">
         <div class="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
-          <i class="fa-solid fa-circle-check"></i> Method A: OBS "Local File" Checkbox (Recommended)
+          <i class="fa-solid fa-circle-check"></i> Instant OBS URL (Blob Protocol)
         </div>
-        <ol class="text-[11px] text-slate-300 space-y-1 list-decimal list-inside pl-1">
-          <div>In OBS, add a new <strong>Browser Source</strong>.</div>
-          <div>Check the box for <strong>Local file</strong>.</div>
-          <div>Click <strong>Browse</strong> and select your saved <code class="text-red-400">youtube_lets_watch_overlay.html</code> file directly from your computer!</div>
-          <div>Set Width to <code class="text-blue-400">420</code> and Height to <code class="text-blue-400">600</code>.</div>
-        </ol>
-      </div>
-
-      <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3.5 space-y-2">
-        <div class="text-xs font-bold text-blue-400 flex items-center gap-1.5">
-          <i class="fa-solid fa-file-arrow-down"></i> Method B: Using your File Path URL
-        </div>
-        <p class="text-[11px] text-slate-400">If you prefer pasting a URL, copy your file path below and add <code class="text-amber-400">?obs=true</code> to the very end:</p>
+        <p class="text-[11px] text-slate-400">Copy this URL and paste it directly into an OBS Browser Source:</p>
         <div class="flex items-center gap-2">
           <input type="text" id="obs-url-field" readonly class="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-2 text-[11px] text-slate-200 font-mono select-all focus:outline-none" onclick="this.select()">
           <button onclick="copyModalUrl()" class="bg-red-600 hover:bg-red-500 text-white text-xs px-3 py-2 rounded-lg font-medium shrink-0 transition">Copy</button>
@@ -202,7 +188,7 @@
       </div>
 
       <div class="flex justify-end pt-1">
-        <button onclick="closeCopyModal()" class="bg-slate-800 hover:bg-slate-700 text-xs px-4 py-2 rounded-xl text-slate-300 font-medium transition">Got it</button>
+        <button onclick="closeCopyModal()" class="bg-slate-800 hover:bg-slate-700 text-xs px-4 py-2 rounded-xl text-slate-300 font-medium transition">Close</button>
       </div>
     </div>
   </div>
@@ -224,8 +210,6 @@
 
     let player = null;
     let isObserverMode = false;
-
-    // BroadcastChannel for instant cross-tab and OBS communication
     const bc = new BroadcastChannel('yt_lets_watch_channel_v10');
 
     bc.onmessage = (event) => {
@@ -257,9 +241,7 @@
     function loadState() {
       const saved = localStorage.getItem('yt_lets_watch_state_v10');
       if (saved) {
-        try {
-          state = JSON.parse(saved);
-        } catch(e) { console.error(e); }
+        try { state = JSON.parse(saved); } catch(e) {}
       }
       autoPromoteQueue();
     }
@@ -303,13 +285,9 @@
         if (response.ok) {
           const data = await response.json();
           if (data.title) videoTitle = data.title;
-          if (!creatorName && data.author_name) {
-            creatorName = data.author_name;
-          }
+          if (!creatorName && data.author_name) creatorName = data.author_name;
         }
-      } catch (err) {
-        console.warn("oembed lookup skipped or restricted", err);
-      }
+      } catch (err) {}
 
       if (!creatorName || creatorName.toLowerCase() === "unknown youtuber") {
         creatorName = "Featured Creator";
@@ -332,7 +310,6 @@
       if (!inputVal) return;
 
       const lines = inputVal.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
-      
       const btn = event ? event.currentTarget : null;
       let originalText = "";
       if (btn) {
@@ -349,14 +326,9 @@
           const parts = line.split('|');
           lineCreator = parts[0].trim();
           targetUrl = parts.slice(1).join('|').trim();
-        } else if (line.includes(' - http')) {
-          const idx = line.indexOf(' - http');
-          lineCreator = line.substring(0, idx).trim();
-          targetUrl = line.substring(idx + 3).trim();
         }
 
         const details = await fetchVideoDetails(targetUrl, lineCreator);
-
         if (!state.current && state.queue.length === 0) {
           state.current = details;
         } else {
@@ -389,8 +361,7 @@
     }
 
     function clearQueue() {
-      const confirmed = window.confirm ? window.confirm("Are you sure you want to clear the entire queue and current video?") : true;
-      if (confirmed) {
+      if (window.confirm("Are you sure you want to clear the entire queue and current video?")) {
         state.current = null;
         state.queue = [];
         saveState();
@@ -410,7 +381,7 @@
       const toast = document.getElementById('toast');
       const tTitle = document.getElementById('toast-title');
       const tMsg = document.getElementById('toast-msg');
-      if (toast && tTitle && tMsg) {
+      if (toast) {
         tTitle.innerText = title;
         tMsg.innerText = message;
         toast.classList.remove('translate-y-20', 'opacity-0', 'pointer-events-none');
@@ -426,11 +397,18 @@
       const modal = document.getElementById('url-modal');
       const field = document.getElementById('obs-url-field');
       if (modal && field) {
-        let loc = window.location.href.split('?')[0];
-        if (!loc.startsWith('file://') && !loc.startsWith('http')) {
-          loc = 'file:///' + loc.replace(/\\/g, '/');
-        }
-        field.value = loc + '?obs=true';
+        // Automatically build a secure Blob URL containing the OBS layout state
+        const cloneDoc = document.documentElement.cloneNode(true);
+        const panel = cloneDoc.querySelector('.control-panel-container');
+        if (panel) panel.remove();
+        
+        const bodyTag = cloneDoc.querySelector('body');
+        if (bodyTag) bodyTag.className = "obs-mode bg-transparent text-slate-100 min-h-screen p-0 flex flex-col items-center justify-start";
+
+        const blob = new Blob([cloneDoc.outerHTML], { type: 'text/html' });
+        const blobUrl = URL.createObjectURL(blob) + '?obs=true';
+
+        field.value = blobUrl;
         modal.classList.remove('opacity-0', 'pointer-events-none');
         modal.classList.add('opacity-100');
         field.focus();
@@ -453,38 +431,23 @@
       field.select();
       field.setSelectionRange(0, 99999);
 
-      try {
-        const successful = document.execCommand('copy');
-        if (successful) {
-          showToast("Link Copied!", "Paste this into your OBS Browser Source.");
-          closeCopyModal();
-          return;
-        }
-      } catch (err) {}
-
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(field.value).then(() => {
-          showToast("Link Copied!", "Paste this into your OBS Browser Source.");
+          showToast("URL Copied!", "Paste this into your OBS Browser Source.");
           closeCopyModal();
-        }).catch(() => {
-          prompt("Copy this file path URL manually for OBS:", field.value);
         });
-      } else {
-        prompt("Copy this file path URL manually for OBS:", field.value);
       }
     }
 
-    // Initialize YouTube IFrame API to auto-advance when video ends
     let tag = document.createElement('script');
     tag.src = "https://www.youtube.com/iframe_api";
-    let firstScriptTag = document.getElementsByTagName('script')[0];
-    firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+    document.getElementsByTagName('script')[0].parentNode.insertBefore(tag, document.getElementsByTagName('script')[0]);
+
+    let activeVideoId = null;
 
     window.onYouTubeIframeAPIReady = function() {
       updatePlayerInstance();
     };
-
-    let activeVideoId = null;
 
     function updatePlayerInstance() {
       const overlayIframe = document.getElementById('overlay-iframe');
@@ -504,9 +467,7 @@
         return;
       }
 
-      if (activeVideoId === state.current.videoId && player) {
-        return;
-      }
+      if (activeVideoId === state.current.videoId && player) return;
 
       activeVideoId = state.current.videoId;
       if (overlayIframe && embedPlaceholder) {
@@ -519,23 +480,13 @@
           try {
             player.loadVideoById(activeVideoId);
             return;
-          } catch(e) {
-            try { player.destroy(); } catch(err) {}
-            player = null;
-          }
+          } catch(e) { player = null; }
         }
 
         player = new YT.Player('overlay-iframe', {
           videoId: activeVideoId,
-          playerVars: {
-            'autoplay': 1,
-            'controls': 1,
-            'enablejsapi': 1,
-            'rel': 0
-          },
-          events: {
-            'onStateChange': onPlayerStateChange
-          }
+          playerVars: { 'autoplay': 1, 'controls': 1, 'enablejsapi': 1, 'rel': 0 },
+          events: { 'onStateChange': (e) => { if (e.data === 0) playNext(); } }
         });
       } else {
         if (overlayIframe) {
@@ -544,19 +495,11 @@
       }
     }
 
-    function onPlayerStateChange(event) {
-      if (event.data === 0) {
-        playNext();
-      }
-    }
-
     function renderAll() {
       autoPromoteQueue();
       const controlList = document.getElementById('control-queue-list');
       const counterBadge = document.getElementById('queue-counter');
-      if (counterBadge) {
-        counterBadge.innerText = `${state.queue.length + (state.current ? 1 : 0)} items`;
-      }
+      if (counterBadge) counterBadge.innerText = `${state.queue.length + (state.current ? 1 : 0)} items`;
 
       if (controlList) {
         if (!state.current && state.queue.length === 0) {

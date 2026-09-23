@@ -173,14 +173,14 @@
         </button>
       </div>
       <p class="text-xs text-slate-300 leading-relaxed">
-        Because local files block YouTube embeds, click the button below to generate a working URL instantly:
+        Copy the self-contained Data URI below. It embeds the entire overlay layout directly into a link that OBS can load natively without files or servers:
       </p>
 
       <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3.5 space-y-3">
         <div class="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
-          <i class="fa-solid fa-circle-check"></i> Instant OBS URL (Blob Protocol)
+          <i class="fa-solid fa-circle-check"></i> Ready-to-Use OBS Data URI
         </div>
-        <p class="text-[11px] text-slate-400">Copy this URL and paste it directly into an OBS Browser Source:</p>
+        <p class="text-[11px] text-slate-400">Copy this long string and paste it into your OBS Browser Source:</p>
         <div class="flex items-center gap-2">
           <input type="text" id="obs-url-field" readonly class="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-2 text-[11px] text-slate-200 font-mono select-all focus:outline-none" onclick="this.select()">
           <button onclick="copyModalUrl()" class="bg-red-600 hover:bg-red-500 text-white text-xs px-3 py-2 rounded-lg font-medium shrink-0 transition">Copy</button>
@@ -397,7 +397,6 @@
       const modal = document.getElementById('url-modal');
       const field = document.getElementById('obs-url-field');
       if (modal && field) {
-        // Automatically build a secure Blob URL containing the OBS layout state
         const cloneDoc = document.documentElement.cloneNode(true);
         const panel = cloneDoc.querySelector('.control-panel-container');
         if (panel) panel.remove();
@@ -405,10 +404,11 @@
         const bodyTag = cloneDoc.querySelector('body');
         if (bodyTag) bodyTag.className = "obs-mode bg-transparent text-slate-100 min-h-screen p-0 flex flex-col items-center justify-start";
 
-        const blob = new Blob([cloneDoc.outerHTML], { type: 'text/html' });
-        const blobUrl = URL.createObjectURL(blob) + '?obs=true';
+        // Convert the full HTML markup into a self-contained Data URI
+        const htmlContent = '<!DOCTYPE html>\n' + cloneDoc.outerHTML;
+        const dataUri = 'data:text/html;charset=utf-8,' + encodeURIComponent(htmlContent);
 
-        field.value = blobUrl;
+        field.value = dataUri;
         modal.classList.remove('opacity-0', 'pointer-events-none');
         modal.classList.add('opacity-100');
         field.focus();
@@ -429,11 +429,11 @@
       if (!field) return;
 
       field.select();
-      field.setSelectionRange(0, 99999);
+      field.setSelectionRange(0, 999999);
 
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(field.value).then(() => {
-          showToast("URL Copied!", "Paste this into your OBS Browser Source.");
+          showToast("Data URI Copied!", "Paste this directly into your OBS Browser Source.");
           closeCopyModal();
         });
       }

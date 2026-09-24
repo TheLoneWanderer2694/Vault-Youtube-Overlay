@@ -34,7 +34,7 @@
     max-width: 420px !important;
   }
   
-  /* Full screen overlay mode when triggered - Fixed selectors & sizing */
+  /* Controlled manual full screen mode class */
   body.obs-mode.fullscreen-mode .overlay-container,
   body.fullscreen-mode .overlay-container {
     max-width: 100% !important;
@@ -89,7 +89,7 @@
         <h1 class="text-2xl font-bold flex items-center gap-2 text-red-500">
           <i class="fa-brands fa-youtube"></i> Let's Watch & Full Screen Mode Manager
         </h1>
-        <p class="text-sm text-slate-400">Manage queue, playlists, chat commands, and trigger full-screen reaction mode via dashboard or <code class="text-purple-400">!fullscreen</code> command.</p>
+        <p class="text-sm text-slate-400">Manage queue, playlists, creator tags, and trigger full-screen reaction mode manually or via chat command.</p>
       </div>
       <div class="flex items-center gap-3">
         <button onclick="toggleObsMode()" class="bg-slate-800 hover:bg-slate-700 text-xs px-3 py-2 rounded-lg font-medium transition border border-slate-700 flex items-center gap-2">
@@ -106,7 +106,7 @@
         <div class="space-y-4">
           <div>
             <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
-              Paste YouTube Links or Playlist URLs
+              Paste YouTube Links or Playlists (e.g., <code class="text-purple-400">CreatorName | https://youtu.be/...</code>)
             </label>
             <textarea id="batch-links-input" rows="3" placeholder="https://www.youtube.com/playlist?list=PLxxxxxxxxxxxxxxxx&#10;Markiplier | https://www.youtube.com/watch?v=dQw4w9WgXcQ" class="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-sm focus:outline-none focus:border-red-500 text-slate-200 placeholder-slate-600 font-mono"></textarea>
           </div>
@@ -133,6 +133,7 @@
         </div>
       </div>
 
+      <!-- Right Col: Chat & Controls -->
       <div class="bg-slate-900/60 border border-slate-800/80 rounded-xl p-4 flex flex-col justify-between">
         <div>
           <div class="flex items-center justify-between mb-3 border-b border-slate-800 pb-2">
@@ -156,7 +157,7 @@
             </button>
           </div>
 
-          <!-- Twitch/YouTube Live Chat Connection Box -->
+          <!-- Stream Chat Connection Box -->
           <div class="bg-slate-950/80 border border-slate-800/90 rounded-xl p-3 mb-4 space-y-2.5">
             <div class="flex items-center justify-between">
               <span class="text-[11px] font-semibold text-slate-300 flex items-center gap-1.5">
@@ -290,7 +291,7 @@
     let mockChatInterval = null;
     let activeVideoId = null;
     let activePlaylistId = null;
-    const bc = new BroadcastChannel('yt_lets_watch_channel_v19');
+    const bc = new BroadcastChannel('yt_lets_watch_channel_v20');
 
     bc.onmessage = (event) => {
       if (event.data && event.data.type === 'STATE_UPDATE') {
@@ -332,16 +333,23 @@
     }
 
     function loadState() {
-      const saved = localStorage.getItem('yt_lets_watch_state_v19');
+      const saved = localStorage.getItem('yt_lets_watch_state_v20');
       if (saved) {
-        try { state = JSON.parse(saved); } catch(e) {}
+        try { 
+          const parsed = JSON.parse(saved);
+          state = parsed;
+          // Ensure isFullScreen defaults to false unless explicitly saved as true
+          if (typeof state.isFullScreen !== 'boolean') {
+            state.isFullScreen = false;
+          }
+        } catch(e) {}
       }
       autoPromoteQueue();
     }
 
     function saveState() {
       autoPromoteQueue();
-      localStorage.setItem('yt_lets_watch_state_v19', JSON.stringify(state));
+      localStorage.setItem('yt_lets_watch_state_v20', JSON.stringify(state));
       bc.postMessage({ type: 'STATE_UPDATE', state: state });
       renderAll();
     }
@@ -563,23 +571,24 @@
 
       if (state.chatBotEnabled) {
         const trimmed = message.trim();
+        const lowerTrimmed = trimmed.toLowerCase();
         
-        if (trimmed.toLowerCase().startsWith('!request ')) {
+        if (lowerTrimmed.startsWith('!request ')) {
           const urlToRequest = trimmed.substring(9).trim();
           if (urlToRequest) {
             await addLinksToQueue(urlToRequest, username);
             state.chatLog.push({ user: 'Bot', tag: 'success', text: `@${username} successfully added item to queue!` });
           }
-        } else if (trimmed.toLowerCase() === '!fullscreen') {
+        } else if (lowerTrimmed === '!fullscreen') {
           state.isFullScreen = !state.isFullScreen;
           state.chatLog.push({ user: 'Bot', tag: 'info', text: `Full screen reaction mode toggled ${state.isFullScreen ? 'ON' : 'OFF'}.` });
-        } else if (trimmed.toLowerCase() === '!skip') {
+        } else if (lowerTrimmed === '!skip') {
           playNext();
           state.chatLog.push({ user: 'Bot', tag: 'info', text: `@${username} skipped current video.` });
-        } else if (trimmed.toLowerCase() === '!queue') {
+        } else if (lowerTrimmed === '!queue') {
           const count = state.queue.length + (state.current ? 1 : 0);
           state.chatLog.push({ user: 'Bot', tag: 'info', text: `Queue currently has ${count} item(s).` });
-        } else if (trimmed.toLowerCase() === '!np') {
+        } else if (lowerTrimmed === '!np') {
           const npText = state.current ? `Now Playing: ${state.current.title} [Creator: ${state.current.creator}]` : `No video currently playing.`;
           state.chatLog.push({ user: 'Bot', tag: 'info', text: npText });
         }
@@ -803,7 +812,7 @@
     });
 
     window.addEventListener('storage', (e) => {
-      if (e.key === 'yt_lets_watch_state_v19') {
+      if (e.key === 'yt_lets_watch_state_v20') {
         loadState();
         renderAll();
       }

@@ -55,7 +55,7 @@
         <h1 class="text-2xl font-bold flex items-center gap-2 text-red-500">
           <i class="fa-brands fa-youtube"></i> Let's Watch Queue Manager
         </h1>
-        <p class="text-sm text-slate-400">Manage queue, playlists, and creator tags for your stream overlay.</p>
+        <p class="text-sm text-slate-400">Manage queue, playlists, and creator tags for your stream overlay with auto-looping.</p>
       </div>
       <div class="flex items-center gap-3">
         <button onclick="toggleObsMode()" class="bg-slate-800 hover:bg-slate-700 text-xs px-3 py-2 rounded-lg font-medium transition border border-slate-700 flex items-center gap-2">
@@ -110,15 +110,13 @@
 
           <div class="space-y-3 text-xs text-slate-300 mb-6">
             <p class="text-slate-400 leading-relaxed">
-              Use this manager to build a seamless playlist or video sequence for your stream. Playlists display with their designated creator badge in both the manager and OBS overlay.
+              When the final video in your queue finishes playing, the queue automatically loops back to the start and keeps playing indefinitely.
             </p>
             <div class="bg-slate-950/80 border border-slate-800 p-3 rounded-lg space-y-2">
-              <div class="text-[11px] font-semibold text-slate-200">Quick Tips:</div>
-              <ul class="list-disc list-inside space-y-1 text-[11px] text-slate-400">
-                <li>Prefix any link with <code class="text-red-400">CreatorName |</code> to tag it.</li>
-                <li>Playlists play automatically via YouTube embedded looping.</li>
-                <li>Click <strong>Preview OBS Overlay Only</strong> to get the clean browser source URL.</li>
-              </ul>
+              <div class="text-[11px] font-semibold text-slate-200">Looping Status:</div>
+              <div class="flex items-center gap-2 text-[11px] text-emerald-400">
+                <i class="fa-solid fa-rotate animate-spin"></i> Auto-Loop Enabled (History Preserved)
+              </div>
             </div>
           </div>
         </div>
@@ -146,6 +144,9 @@
           <h2 class="text-xs font-bold uppercase tracking-wider text-slate-300">Let's Watch Queue</h2>
         </div>
         <div class="flex items-center gap-2">
+          <button onclick="toggleObsMode()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-[10px] px-2.5 py-1 rounded-md font-medium transition border border-slate-700 flex items-center gap-1.5" title="Return to Dashboard">
+            <i class="fa-solid fa-arrow-left"></i> Dashboard
+          </button>
           <span id="overlay-count" class="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded font-medium">0 upcoming</span>
         </div>
       </div>
@@ -153,7 +154,7 @@
       <!-- Now Playing Box -->
       <div class="bg-gradient-to-r from-red-950/40 to-slate-900/80 border border-red-500/30 rounded-xl p-3 flex flex-col flex-1">
         <div class="text-[10px] font-semibold text-red-400 uppercase tracking-wider mb-1.5 flex items-center justify-between shrink-0">
-          <span class="flex items-center gap-1.5"><i class="fa-solid fa-play text-[8px]"></i> Now Watching</span>
+          <span class="flex items-center gap-1.5"><i class="fa-solid fa-play text-[8px]"></i> Now Watching (Looping Active)</span>
           <span id="player-status-badge" class="text-[9px] bg-red-900/60 text-red-300 px-1.5 py-0.5 rounded font-mono">Inactive</span>
         </div>
         
@@ -188,14 +189,15 @@
   <script>
     let state = {
       current: null,
-      queue: []
+      queue: [],
+      history: []
     };
 
     let player = null;
     let isObserverMode = false;
     let activeVideoId = null;
     let activePlaylistId = null;
-    const bc = new BroadcastChannel('yt_lets_watch_channel_clean_v21');
+    const bc = new BroadcastChannel('yt_lets_watch_channel_loop_v22');
 
     bc.onmessage = (event) => {
       if (event.data && event.data.type === 'STATE_UPDATE') {
@@ -232,7 +234,7 @@
     }
 
     function loadState() {
-      const saved = localStorage.getItem('yt_lets_watch_state_clean_v21');
+      const saved = localStorage.getItem('yt_lets_watch_state_loop_v22');
       if (saved) {
         try { 
           state = JSON.parse(saved);
@@ -243,13 +245,21 @@
 
     function saveState() {
       autoPromoteQueue();
-      localStorage.setItem('yt_lets_watch_state_clean_v21', JSON.stringify(state));
+      localStorage.setItem('yt_lets_watch_state_loop_v22', JSON.stringify(state));
       bc.postMessage({ type: 'STATE_UPDATE', state: state });
       renderAll();
     }
 
     function autoPromoteQueue() {
+      if (!state.history) state.history = [];
+
       if (!state.current && state.queue.length > 0) {
+        if (state.current) state.history.push(state.current);
+        state.current = state.queue.shift();
+      } else if (!state.current && state.queue.length === 0 && state.history.length > 0) {
+        // Loop complete: recycle history back into queue!
+        state.queue = [...state.history];
+        state.history = [];
         state.current = state.queue.shift();
       }
     }
@@ -364,11 +374,22 @@
     }
 
     function playNext() {
+      if (state.current) {
+        if (!state.history) state.history = [];
+        state.history.push(state.current);
+      }
+
       if (state.queue.length > 0) {
+        state.current = state.queue.shift();
+      } else if (state.history.length > 0) {
+        // Loop queue when empty
+        state.queue = [...state.history];
+        state.history = [];
         state.current = state.queue.shift();
       } else {
         state.current = null;
       }
+
       saveState();
       updatePlayerInstance();
     }
@@ -381,15 +402,17 @@
     function clearQueue() {
       state.current = null;
       state.queue = [];
+      state.history = [];
       saveState();
       updatePlayerInstance();
     }
 
     function jumpToItem(index) {
-      const target = state.queue.splice(index, 1)[0];
       if (state.current) {
-        state.queue.unshift(state.current);
+        if (!state.history) state.history = [];
+        state.history.push(state.current);
       }
+      const target = state.queue.splice(index, 1)[0];
       state.current = target;
       saveState();
       updatePlayerInstance();
@@ -519,7 +542,7 @@
         if (titleEl) titleEl.innerText = state.current.title;
         if (creatorEl) creatorEl.innerText = state.current.creator;
         if (statusBadge) {
-          statusBadge.innerText = state.current.playlistId ? "Playlist Active" : "Auto-Queue Active";
+          statusBadge.innerText = state.current.playlistId ? "Playlist Looping" : "Auto-Queue Loop";
           statusBadge.className = "text-[9px] bg-emerald-900/60 text-emerald-300 px-1.5 py-0.5 rounded font-mono";
         }
       } else {
@@ -534,7 +557,7 @@
       const overlayUpcoming = document.getElementById('overlay-upcoming-list');
       if (overlayUpcoming) {
         if (state.queue.length === 0) {
-          overlayUpcoming.innerHTML = `<div class="text-[11px] text-slate-500 italic text-center py-2">Queue is empty</div>`;
+          overlayUpcoming.innerHTML = `<div class="text-[11px] text-slate-500 italic text-center py-2">Queue loops automatically when finished</div>`;
         } else {
           let upcomingHtml = '';
           state.queue.forEach((item, idx) => {
@@ -563,7 +586,7 @@
     });
 
     window.addEventListener('storage', (e) => {
-      if (e.key === 'yt_lets_watch_state_clean_v21') {
+      if (e.key === 'yt_lets_watch_state_loop_v22') {
         loadState();
         renderAll();
       }

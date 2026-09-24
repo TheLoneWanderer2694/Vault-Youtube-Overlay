@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>YouTube</title>
+<title>YouTube Let's Watch & Full Screen Reaction Mode</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <style>
@@ -19,9 +19,11 @@
   body.obs-mode {
     background-color: transparent !important;
     padding: 0 !important;
+    margin: 0 !important;
     display: flex !important;
     justify-content: center !important;
     align-items: flex-start !important;
+    overflow: hidden !important;
   }
   body.obs-mode .control-panel-container {
     display: none !important;
@@ -31,6 +33,41 @@
     width: 100% !important;
     max-width: 420px !important;
   }
+  
+  /* Full screen overlay mode when triggered - Fixed selectors & sizing */
+  body.obs-mode.fullscreen-mode .overlay-container,
+  body.fullscreen-mode .overlay-container {
+    max-width: 100% !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    position: fixed !important;
+    inset: 0 !important;
+    background: rgba(2, 6, 23, 0.98) !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    z-index: 9999 !important;
+    padding: 2rem !important;
+  }
+  body.fullscreen-mode .overlay-container .glass-panel {
+    width: 100% !important;
+    max-width: 1200px !important;
+    height: 100% !important;
+    max-height: 90vh !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+  body.fullscreen-mode .overlay-container .relative.w-full {
+    flex: 1 !important;
+    padding-top: 0 !important;
+    height: 100% !important;
+    min-height: 500px !important;
+  }
+  body.fullscreen-mode .overlay-container .upcoming-section-wrapper {
+    display: none !important;
+  }
+
   ::-webkit-scrollbar {
     width: 6px;
   }
@@ -46,13 +83,13 @@
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen p-4 md:p-8 flex flex-col items-center justify-start">
 
-  <div class="control-panel-container w-full max-w-4xl mb-10 glass-panel rounded-2xl p-6 shadow-2xl">
+  <div class="control-panel-container w-full max-w-5xl mb-10 glass-panel rounded-2xl p-6 shadow-2xl">
     <div class="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-800 pb-4 mb-6 gap-4">
       <div>
         <h1 class="text-2xl font-bold flex items-center gap-2 text-red-500">
-          <i class="fa-brands fa-youtube"></i> Let's Watch & Playlist Manager
+          <i class="fa-brands fa-youtube"></i> Let's Watch & Full Screen Mode Manager
         </h1>
-        <p class="text-sm text-slate-400">Paste individual YouTube links or full Playlist URLs (<code class="text-blue-400">list=PL...</code>). Format: <code class="text-blue-400">Creator | Link</code></p>
+        <p class="text-sm text-slate-400">Manage queue, playlists, chat commands, and trigger full-screen reaction mode via dashboard or <code class="text-purple-400">!fullscreen</code> command.</p>
       </div>
       <div class="flex items-center gap-3">
         <button onclick="toggleObsMode()" class="bg-slate-800 hover:bg-slate-700 text-xs px-3 py-2 rounded-lg font-medium transition border border-slate-700 flex items-center gap-2">
@@ -61,84 +98,157 @@
       </div>
     </div>
 
-    <!-- Batch Link / Playlist Input Section -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-      <div class="md:col-span-2 space-y-4">
-        <div>
-          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
-            Paste YouTube Links or Playlist URLs
-          </label>
-          <textarea id="batch-links-input" rows="4" placeholder="https://www.youtube.com/playlist?list=PLxxxxxxxxxxxxxxxx&#10;Markiplier | https://www.youtube.com/watch?v=dQw4w9WgXcQ" class="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-sm focus:outline-none focus:border-red-500 text-slate-200 placeholder-slate-600 font-mono"></textarea>
-        </div>
-        <div class="flex items-center gap-4">
-          <div class="flex-1">
-            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Default Creator Override</label>
-            <input type="text" id="override-creator" placeholder="e.g. Channel Team" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-red-500 text-slate-200 placeholder-slate-600">
+    <!-- Main Grid Configuration -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      
+      <!-- Left 2 Cols: Queue & Link Input -->
+      <div class="lg:col-span-2 space-y-6">
+        <div class="space-y-4">
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
+              Paste YouTube Links or Playlist URLs
+            </label>
+            <textarea id="batch-links-input" rows="3" placeholder="https://www.youtube.com/playlist?list=PLxxxxxxxxxxxxxxxx&#10;Markiplier | https://www.youtube.com/watch?v=dQw4w9WgXcQ" class="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-sm focus:outline-none focus:border-red-500 text-slate-200 placeholder-slate-600 font-mono"></textarea>
           </div>
-          <button onclick="addLinksToQueue()" class="self-end bg-red-600 hover:bg-red-500 text-white px-5 py-2.5 rounded-xl font-semibold text-sm transition shadow-lg shadow-red-600/30 flex items-center gap-2 h-[41px]">
-            <i class="fa-solid fa-plus"></i> Add to Queue
-          </button>
+          <div class="flex items-center gap-4">
+            <div class="flex-1">
+              <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Default Creator Override</label>
+              <input type="text" id="override-creator" placeholder="e.g. Channel Team" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-red-500 text-slate-200 placeholder-slate-600">
+            </div>
+            <button onclick="addLinksToQueue()" class="self-end bg-red-600 hover:bg-red-500 text-white px-5 py-2.5 rounded-xl font-semibold text-sm transition shadow-lg shadow-red-600/30 flex items-center gap-2 h-[41px]">
+              <i class="fa-solid fa-plus"></i> Add to Queue
+            </button>
+          </div>
+        </div>
+
+        <!-- Live Queue Manager List -->
+        <div class="pt-4 border-t border-slate-800">
+          <div class="flex justify-between items-center mb-3">
+            <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400">Live Queue Manager</h3>
+            <span id="queue-counter" class="bg-slate-800 text-[11px] px-2.5 py-0.5 rounded-md font-bold text-slate-200">0 items</span>
+          </div>
+          <div id="control-queue-list" class="space-y-2 max-h-56 overflow-y-auto pr-1">
+            <div class="text-xs text-slate-500 italic p-3 text-center bg-slate-900/40 rounded-lg">Queue is currently empty. Add links above!</div>
+          </div>
         </div>
       </div>
 
-      <!-- Quick Control Hub -->
       <div class="bg-slate-900/60 border border-slate-800/80 rounded-xl p-4 flex flex-col justify-between">
         <div>
-          <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">Queue Actions</h3>
-          <div class="space-y-2">
-            <button onclick="playNext()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs py-2 rounded-lg font-medium transition flex items-center justify-center gap-2 shadow">
-              <i class="fa-solid fa-forward-step"></i> Next Video in Queue
-            </button>
-            <button onclick="clearQueue()" class="w-full bg-slate-800 hover:bg-rose-900/40 hover:text-rose-400 text-slate-300 text-xs py-2 rounded-lg font-medium transition flex items-center justify-center gap-2 border border-slate-700">
-              <i class="fa-solid fa-trash-can"></i> Clear Entire Queue
+          <div class="flex items-center justify-between mb-3 border-b border-slate-800 pb-2">
+            <h3 class="text-xs font-semibold uppercase tracking-wider text-purple-400 flex items-center gap-1.5">
+              <i class="fa-solid fa-terminal"></i> Chat & Full Screen Controls
+            </h3>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" id="chat-bot-toggle" checked onchange="toggleChatBot()" class="sr-only peer">
+              <div class="w-7 h-4 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-purple-600"></div>
+            </label>
+          </div>
+
+          <!-- Full Screen Mode Manual Toggle Button -->
+          <div class="bg-slate-950/80 border border-slate-800/90 rounded-xl p-3 mb-4 flex items-center justify-between">
+            <div>
+              <span class="text-xs font-bold text-white block">Full Screen Reaction Mode</span>
+              <span class="text-[10px] text-slate-400">Enlarges player to fill screen</span>
+            </div>
+            <button onclick="toggleFullScreenMode()" id="fullscreen-toggle-btn" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg text-xs font-semibold transition border border-slate-700 flex items-center gap-1.5">
+              <i class="fa-solid fa-expand"></i> <span id="fullscreen-btn-text">Enable</span>
             </button>
           </div>
-        </div>
-        <div class="mt-4 pt-4 border-t border-slate-800 text-xs text-slate-400 flex justify-between items-center">
-          <span>Queue Count:</span>
-          <span id="queue-counter" class="bg-slate-800 px-2.5 py-1 rounded-md font-bold text-slate-200">0 items</span>
-        </div>
-      </div>
-    </div>
 
-    <!-- Active Management List -->
-    <div class="mt-6 pt-6 border-t border-slate-800">
-      <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">Live Queue Manager</h3>
-      <div id="control-queue-list" class="space-y-2 max-h-60 overflow-y-auto pr-1">
-        <div class="text-xs text-slate-500 italic p-3 text-center bg-slate-900/40 rounded-lg">Queue is currently empty. Add links above!</div>
+          <!-- Twitch/YouTube Live Chat Connection Box -->
+          <div class="bg-slate-950/80 border border-slate-800/90 rounded-xl p-3 mb-4 space-y-2.5">
+            <div class="flex items-center justify-between">
+              <span class="text-[11px] font-semibold text-slate-300 flex items-center gap-1.5">
+                <i class="fa-solid fa-satellite-dish text-purple-400"></i> Stream Chat Connection
+              </span>
+              <span id="chat-connection-status" class="text-[9px] px-2 py-0.5 rounded font-mono bg-amber-950 text-amber-400 border border-amber-800">Disconnected</span>
+            </div>
+            <div class="flex gap-2">
+              <input type="text" id="stream-channel-input" placeholder="Channel Name" value="MyStreamer" class="flex-1 bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-purple-500">
+              <button id="chat-connect-btn" onclick="toggleStreamChatConnection()" class="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0">Connect</button>
+            </div>
+          </div>
+
+          <!-- Chat Commands Reference Guide -->
+          <div class="bg-slate-950/60 border border-slate-800/80 rounded-xl p-3 mb-4 space-y-2">
+            <span class="text-[10px] font-semibold uppercase tracking-wider text-purple-400 block mb-1">Active Bot Commands</span>
+            <div class="space-y-1 text-[11px] text-slate-300 font-mono">
+              <div class="flex justify-between items-center bg-slate-900/80 px-2 py-1 rounded">
+                <span class="text-purple-300 font-bold">!request &lt;url&gt;</span>
+                <span class="text-slate-400 text-[10px]">Add video</span>
+              </div>
+              <div class="flex justify-between items-center bg-slate-900/80 px-2 py-1 rounded">
+                <span class="text-purple-300 font-bold">!fullscreen</span>
+                <span class="text-slate-400 text-[10px]">Toggle full screen</span>
+              </div>
+              <div class="flex justify-between items-center bg-slate-900/80 px-2 py-1 rounded">
+                <span class="text-purple-300 font-bold">!skip / !queue</span>
+                <span class="text-slate-400 text-[10px]">Queue controls</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Chat Simulator Input -->
+          <div class="mb-3">
+            <label class="block text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Simulate Incoming Chat Message</label>
+            <div class="flex gap-2">
+              <input type="text" id="sim-user-input" placeholder="Username" value="SuperFan99" class="w-1/3 bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-purple-500">
+              <input type="text" id="sim-msg-input" placeholder="e.g. !fullscreen" onkeypress="if(event.key==='Enter') submitSimulatedChat()" class="flex-1 bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-purple-500">
+              <button onclick="submitSimulatedChat()" class="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition">Send</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-4 pt-4 border-t border-slate-800">
+          <div class="flex justify-between items-center text-xs">
+            <span class="text-slate-400">Queue Actions:</span>
+            <div class="flex gap-2">
+              <button onclick="playNext()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] px-2.5 py-1 rounded font-medium transition shadow">Skip Next</button>
+              <button onclick="clearQueue()" class="bg-slate-800 hover:bg-rose-900/40 hover:text-rose-400 text-slate-300 text-[11px] px-2.5 py-1 rounded font-medium transition border border-slate-700">Clear</button>
+            </div>
+          </div>
+        </div>
       </div>
+
     </div>
   </div>
 
   <div id="overlay-container" class="overlay-container w-full max-w-[420px]">
-    <div class="glass-panel rounded-2xl p-4 shadow-2xl border border-slate-700/60">
+    <div class="glass-panel rounded-2xl p-4 shadow-2xl border border-slate-700/60 space-y-3 flex flex-col">
       <!-- Header -->
-      <div class="flex items-center justify-between mb-3 border-b border-slate-800/80 pb-2.5">
+      <div class="flex items-center justify-between border-b border-slate-800/80 pb-2.5 shrink-0">
         <div class="flex items-center gap-2">
           <span class="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></span>
           <h2 class="text-xs font-bold uppercase tracking-wider text-slate-300">Let's Watch Queue</h2>
         </div>
-        <span id="overlay-count" class="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded font-medium">0 upcoming</span>
+        <div class="flex items-center gap-2">
+          <button onclick="toggleFullScreenMode()" class="text-[9px] bg-purple-900/80 hover:bg-purple-700 text-purple-200 px-2 py-1 rounded font-bold uppercase tracking-wider transition flex items-center gap-1 cursor-pointer">
+            <i class="fa-solid fa-expand"></i> Toggle Fullscreen
+          </button>
+          <span id="fullscreen-badge" class="hidden text-[9px] bg-purple-900/80 text-purple-200 px-2 py-0.5 rounded font-bold uppercase tracking-wider animate-pulse">Full Screen Active</span>
+          <span id="overlay-count" class="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded font-medium">0 upcoming</span>
+        </div>
       </div>
 
       <!-- Now Playing Box -->
-      <div class="mb-3 bg-gradient-to-r from-red-950/40 to-slate-900/80 border border-red-500/30 rounded-xl p-3">
-        <div class="text-[10px] font-semibold text-red-400 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+      <div class="bg-gradient-to-r from-red-950/40 to-slate-900/80 border border-red-500/30 rounded-xl p-3 flex flex-col flex-1">
+        <div class="text-[10px] font-semibold text-red-400 uppercase tracking-wider mb-1.5 flex items-center justify-between shrink-0">
           <span class="flex items-center gap-1.5"><i class="fa-solid fa-play text-[8px]"></i> Now Watching</span>
           <span id="player-status-badge" class="text-[9px] bg-red-900/60 text-red-300 px-1.5 py-0.5 rounded font-mono">Inactive</span>
         </div>
         
-        <div class="mb-2 flex items-center gap-2">
+        <div class="mb-2 flex items-center gap-2 shrink-0">
           <span class="bg-blue-600/20 text-blue-400 border border-blue-500/30 text-xs px-2.5 py-1 rounded-full font-semibold flex items-center gap-1.5 shadow-sm">
             <i class="fa-solid fa-user-tag text-[11px]"></i> <span id="overlay-current-creator">No YouTuber assigned</span>
           </span>
         </div>
 
-        <div id="overlay-current-title" class="text-sm font-semibold text-white truncate mb-2.5">Waiting for selection...</div>
+        <div id="overlay-current-title" class="text-sm font-semibold text-white truncate mb-2.5 shrink-0">Waiting for selection...</div>
         
-        <div class="relative w-full pt-[56.25%] bg-black/90 rounded-lg overflow-hidden border border-slate-800 shadow-inner group">
+        <div class="relative w-full pt-[56.25%] bg-black/90 rounded-lg overflow-hidden border border-slate-800 shadow-inner flex-1">
           <div id="embed-container" class="absolute inset-0 w-full h-full flex items-center justify-center">
-            <iframe id="overlay-iframe" src="" class="w-full h-full border-0 hidden" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+            <div id="overlay-iframe-wrapper" class="absolute inset-0 w-full h-full"></div>
             <div id="embed-placeholder" class="absolute inset-0 w-full h-full flex items-center justify-center text-slate-500 text-xs bg-slate-950">
               <div class="text-center p-4">
                 <i class="fa-brands fa-youtube text-2xl text-slate-600 mb-1 block"></i>
@@ -150,7 +260,7 @@
       </div>
 
       <!-- Upcoming Queue List -->
-      <div class="space-y-1.5 max-h-[220px] overflow-y-auto pr-1" id="overlay-upcoming-list">
+      <div class="space-y-1.5 max-h-[190px] overflow-y-auto pr-1 shrink-0 upcoming-section-wrapper" id="overlay-upcoming-list">
         <div class="text-xs text-slate-500 italic text-center py-3">Queue is empty</div>
       </div>
     </div>
@@ -159,18 +269,34 @@
   <script>
     let state = {
       current: null,
-      queue: []
+      queue: [],
+      chatBotEnabled: true,
+      chatLog: [],
+      chatConnected: false,
+      channelName: '',
+      isFullScreen: false
     };
 
     let player = null;
     let isObserverMode = false;
-    const bc = new BroadcastChannel('yt_lets_watch_channel_v13');
+    let mockChatInterval = null;
+    let activeVideoId = null;
+    let activePlaylistId = null;
+    const bc = new BroadcastChannel('yt_lets_watch_channel_v17');
 
     bc.onmessage = (event) => {
       if (event.data && event.data.type === 'STATE_UPDATE') {
-        state = event.data.state;
+        const incomingState = event.data.state;
+        const currentId = state.current ? (state.current.videoId || state.current.playlistId) : null;
+        const incomingId = incomingState.current ? (incomingState.current.videoId || incomingState.current.playlistId) : null;
+        
+        state = incomingState;
         autoPromoteQueue();
         renderAll();
+
+        if (currentId !== incomingId) {
+          updatePlayerInstance();
+        }
       }
     };
 
@@ -192,8 +318,13 @@
       }
     }
 
+    function toggleFullScreenMode() {
+      state.isFullScreen = !state.isFullScreen;
+      saveState();
+    }
+
     function loadState() {
-      const saved = localStorage.getItem('yt_lets_watch_state_v13');
+      const saved = localStorage.getItem('yt_lets_watch_state_v17');
       if (saved) {
         try { state = JSON.parse(saved); } catch(e) {}
       }
@@ -202,7 +333,7 @@
 
     function saveState() {
       autoPromoteQueue();
-      localStorage.setItem('yt_lets_watch_state_v13', JSON.stringify(state));
+      localStorage.setItem('yt_lets_watch_state_v17', JSON.stringify(state));
       bc.postMessage({ type: 'STATE_UPDATE', state: state });
       renderAll();
     }
@@ -275,15 +406,24 @@
       };
     }
 
-    async function addLinksToQueue() {
-      const inputEl = document.getElementById('batch-links-input');
-      const creatorEl = document.getElementById('override-creator');
-      const inputVal = inputEl ? inputEl.value.trim() : '';
-      const defaultOverride = creatorEl ? creatorEl.value.trim() : '';
-      if (!inputVal) return;
+    async function addLinksToQueue(overrideTargetUrl = null, overrideCreator = null) {
+      let inputVal = "";
+      let defaultOverride = "";
+
+      if (overrideTargetUrl) {
+        inputVal = overrideTargetUrl;
+        defaultOverride = overrideCreator || "Chat User";
+      } else {
+        const inputEl = document.getElementById('batch-links-input');
+        const creatorEl = document.getElementById('override-creator');
+        inputVal = inputEl ? inputEl.value.trim() : '';
+        defaultOverride = creatorEl ? creatorEl.value.trim() : '';
+      }
+
+      if (!inputVal) return null;
 
       const lines = inputVal.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
-      const btn = event ? event.currentTarget : null;
+      const btn = event && !overrideTargetUrl ? event.currentTarget : null;
       let originalText = "";
       if (btn) {
         originalText = btn.innerHTML;
@@ -309,14 +449,20 @@
         }
       }
 
-      if (inputEl) inputEl.value = '';
-      if (creatorEl) creatorEl.value = '';
+      if (!overrideTargetUrl) {
+        const inputEl = document.getElementById('batch-links-input');
+        const creatorEl = document.getElementById('override-creator');
+        if (inputEl) inputEl.value = '';
+        if (creatorEl) creatorEl.value = '';
+      }
+
       if (btn) {
         btn.innerHTML = originalText;
         btn.disabled = false;
       }
 
       saveState();
+      updatePlayerInstance();
     }
 
     function playNext() {
@@ -326,6 +472,7 @@
         state.current = null;
       }
       saveState();
+      updatePlayerInstance();
     }
 
     function removeItem(index) {
@@ -334,11 +481,10 @@
     }
 
     function clearQueue() {
-      if (window.confirm("Are you sure you want to clear the entire queue and current video?")) {
-        state.current = null;
-        state.queue = [];
-        saveState();
-      }
+      state.current = null;
+      state.queue = [];
+      saveState();
+      updatePlayerInstance();
     }
 
     function jumpToItem(index) {
@@ -348,84 +494,186 @@
       }
       state.current = target;
       saveState();
+      updatePlayerInstance();
+    }
+
+    function toggleChatBot() {
+      const toggle = document.getElementById('chat-bot-toggle');
+      state.chatBotEnabled = toggle ? toggle.checked : true;
+      saveState();
+    }
+
+    function toggleStreamChatConnection() {
+      const chanInput = document.getElementById('stream-channel-input');
+      const btn = document.getElementById('chat-connect-btn');
+      const statusBadge = document.getElementById('chat-connection-status');
+
+      if (!state.chatConnected) {
+        const chan = chanInput ? chanInput.value.trim() : 'MyStreamer';
+        if (!chan) return;
+        state.chatConnected = true;
+        state.channelName = chan;
+        
+        if (btn) {
+          btn.innerText = "Disconnect";
+          btn.className = "bg-rose-600 hover:bg-rose-500 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0";
+        }
+        if (statusBadge) {
+          statusBadge.innerText = `Connected (${chan})`;
+          statusBadge.className = "text-[9px] px-2 py-0.5 rounded font-mono bg-emerald-950 text-emerald-400 border border-emerald-800";
+        }
+        
+        if (mockChatInterval) clearInterval(mockChatInterval);
+        mockChatInterval = setInterval(() => {
+          const randomViewers = ['PixelGamer', 'RetroFan', 'SpeedrunnerX', 'ChillViewer'];
+          const randomViewer = randomViewers[Math.floor(Math.random() * randomViewers.length)];
+          const sampleMessages = ['!fullscreen', '!queue', 'Great video!'];
+          const sampleMsg = sampleMessages[Math.floor(Math.random() * sampleMessages.length)];
+          handleChatMessage(randomViewer, sampleMsg);
+        }, 22000);
+
+      } else {
+        state.chatConnected = false;
+        if (mockChatInterval) clearInterval(mockChatInterval);
+
+        if (btn) {
+          btn.innerText = "Connect";
+          btn.className = "bg-purple-600 hover:bg-purple-500 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0";
+        }
+        if (statusBadge) {
+          statusBadge.innerText = "Disconnected";
+          statusBadge.className = "text-[9px] px-2 py-0.5 rounded font-mono bg-amber-950 text-amber-400 border border-amber-800";
+        }
+      }
+      saveState();
+    }
+
+    async function handleChatMessage(username, message) {
+      if (!state.chatLog) state.chatLog = [];
+      state.chatLog.push({ user: username, text: message });
+      if (state.chatLog.length > 30) state.chatLog.shift();
+
+      if (!state.chatBotEnabled) {
+        saveState();
+        return;
+      }
+
+      const trimmed = message.trim();
+      if (trimmed.startsWith('!request ')) {
+        const urlToRequest = trimmed.replace('!request ', '').trim();
+        await addLinksToQueue(urlToRequest, username);
+      } else if (trimmed === '!fullscreen') {
+        state.isFullScreen = !state.isFullScreen;
+      } else if (trimmed === '!skip') {
+        playNext();
+      }
+
+      saveState();
+    }
+
+    function submitSimulatedChat() {
+      const userEl = document.getElementById('sim-user-input');
+      const msgEl = document.getElementById('sim-msg-input');
+      const username = userEl ? userEl.value.trim() || 'Viewer' : 'Viewer';
+      const msg = msgEl ? msgEl.value.trim() : '';
+      if (!msg) return;
+
+      if (msgEl) msgEl.value = '';
+      handleChatMessage(username, msg);
     }
 
     let tag = document.createElement('script');
     tag.src = "https://www.youtube.com/iframe_api";
     document.getElementsByTagName('script')[0].parentNode.insertBefore(tag, document.getElementsByTagName('script')[0]);
 
-    let activeVideoId = null;
-    let activePlaylistId = null;
-
     window.onYouTubeIframeAPIReady = function() {
       updatePlayerInstance();
     };
 
     function updatePlayerInstance() {
-      const overlayIframe = document.getElementById('overlay-iframe');
+      const wrapper = document.getElementById('overlay-iframe-wrapper');
       const embedPlaceholder = document.getElementById('embed-placeholder');
       
       if (!state.current || (!state.current.videoId && !state.current.playlistId)) {
-        if (overlayIframe && embedPlaceholder) {
-          overlayIframe.src = "";
-          overlayIframe.classList.add('hidden');
+        if (wrapper && embedPlaceholder) {
+          wrapper.innerHTML = "";
           embedPlaceholder.classList.remove('hidden');
         }
         activeVideoId = null;
         activePlaylistId = null;
-        if (player) {
-          try { player.destroy(); } catch(e) {}
-          player = null;
-        }
+        player = null;
         return;
       }
 
-      if (overlayIframe && embedPlaceholder) {
-        overlayIframe.classList.remove('hidden');
+      if (embedPlaceholder) {
         embedPlaceholder.classList.add('hidden');
       }
 
-      if (state.current.playlistId) {
-        if (activePlaylistId === state.current.playlistId && player) return;
-        activePlaylistId = state.current.playlistId;
+      const newVideoId = state.current.videoId;
+      const newPlaylistId = state.current.playlistId;
+
+      if (newPlaylistId) {
+        if (activePlaylistId === newPlaylistId) return;
+        activePlaylistId = newPlaylistId;
         activeVideoId = null;
+        player = null;
 
-        if (player) {
-          try { player.destroy(); } catch(e) {}
-          player = null;
+        if (wrapper) {
+          wrapper.innerHTML = `<iframe id="overlay-iframe" src="https://www.youtube-nocookie.com/embed/videoseries?list=${newPlaylistId}&autoplay=1&enablejsapi=1" class="w-full h-full border-0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>`;
         }
-
-        overlayIframe.src = `https://www.youtube-nocookie.com/embed/videoseries?list=${activePlaylistId}&autoplay=1&enablejsapi=1`;
         return;
       }
 
-      if (activeVideoId === state.current.videoId && player) return;
+      if (newVideoId) {
+        if (activeVideoId === newVideoId && player) return;
+        activeVideoId = newVideoId;
+        activePlaylistId = null;
 
-      activeVideoId = state.current.videoId;
-      activePlaylistId = null;
-
-      if (window.YT && window.YT.Player) {
-        if (player) {
-          try {
-            player.loadVideoById(activeVideoId);
-            return;
-          } catch(e) { player = null; }
-        }
-
-        player = new YT.Player('overlay-iframe', {
-          videoId: activeVideoId,
-          playerVars: { 'autoplay': 1, 'controls': 1, 'enablejsapi': 1, 'rel': 0 },
-          events: { 'onStateChange': (e) => { if (e.data === 0) playNext(); } }
-        });
-      } else {
-        if (overlayIframe) {
-          overlayIframe.src = `https://www.youtube-nocookie.com/embed/${activeVideoId}?autoplay=1&enablejsapi=1`;
+        if (window.YT && window.YT.Player) {
+          if (!player) {
+            if (wrapper) wrapper.innerHTML = `<div id="overlay-iframe" class="w-full h-full"></div>`;
+            player = new YT.Player('overlay-iframe', {
+              videoId: newVideoId,
+              playerVars: { 'autoplay': 1, 'controls': 1, 'enablejsapi': 1, 'rel': 0 },
+              events: { 'onStateChange': (e) => { if (e.data === 0) playNext(); } }
+            });
+          } else {
+            try {
+              player.loadVideoById(newVideoId);
+            } catch(e) {
+              if (wrapper) wrapper.innerHTML = `<iframe id="overlay-iframe" src="https://www.youtube-nocookie.com/embed/${newVideoId}?autoplay=1&enablejsapi=1" class="w-full h-full border-0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>`;
+            }
+          }
+        } else {
+          if (wrapper) {
+            wrapper.innerHTML = `<iframe id="overlay-iframe" src="https://www.youtube-nocookie.com/embed/${newVideoId}?autoplay=1&enablejsapi=1" class="w-full h-full border-0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>`;
+          }
         }
       }
     }
 
     function renderAll() {
       autoPromoteQueue();
+
+      const chatBotToggle = document.getElementById('chat-bot-toggle');
+      if (chatBotToggle) chatBotToggle.checked = state.chatBotEnabled;
+
+      const fullscreenBadge = document.getElementById('fullscreen-badge');
+      const fullscreenBtnText = document.getElementById('fullscreen-btn-text');
+      const fullscreenToggleBtn = document.getElementById('fullscreen-toggle-btn');
+
+      if (state.isFullScreen) {
+        document.body.classList.add('fullscreen-mode');
+        if (fullscreenBadge) fullscreenBadge.classList.remove('hidden');
+        if (fullscreenBtnText) fullscreenBtnText.innerText = "Disable Full Screen";
+        if (fullscreenToggleBtn) fullscreenToggleBtn.className = "bg-purple-600 hover:bg-purple-500 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition border border-purple-500 flex items-center gap-1.5";
+      } else {
+        document.body.classList.remove('fullscreen-mode');
+        if (fullscreenBadge) fullscreenBadge.classList.add('hidden');
+        if (fullscreenBtnText) fullscreenBtnText.innerText = "Enable";
+        if (fullscreenToggleBtn) fullscreenToggleBtn.className = "bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg text-xs font-semibold transition border border-slate-700 flex items-center gap-1.5";
+      }
+
       const controlList = document.getElementById('control-queue-list');
       const counterBadge = document.getElementById('queue-counter');
       if (counterBadge) counterBadge.innerText = `${state.queue.length + (state.current ? 1 : 0)} items`;
@@ -480,7 +728,6 @@
           statusBadge.innerText = state.current.playlistId ? "Playlist Active" : "Auto-Queue Active";
           statusBadge.className = "text-[9px] bg-emerald-900/60 text-emerald-300 px-1.5 py-0.5 rounded font-mono";
         }
-        updatePlayerInstance();
       } else {
         if (titleEl) titleEl.innerText = "No video playing";
         if (creatorEl) creatorEl.innerText = "Waiting in queue";
@@ -488,7 +735,6 @@
           statusBadge.innerText = "Inactive";
           statusBadge.className = "text-[9px] bg-red-900/60 text-red-300 px-1.5 py-0.5 rounded font-mono";
         }
-        updatePlayerInstance();
       }
 
       const overlayUpcoming = document.getElementById('overlay-upcoming-list');
@@ -519,10 +765,11 @@
       checkObsQueryParam();
       loadState();
       renderAll();
+      updatePlayerInstance();
     });
 
     window.addEventListener('storage', (e) => {
-      if (e.key === 'yt_lets_watch_state_v13') {
+      if (e.key === 'yt_lets_watch_state_v17') {
         loadState();
         renderAll();
       }

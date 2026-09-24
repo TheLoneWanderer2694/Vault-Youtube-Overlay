@@ -290,7 +290,7 @@
     let mockChatInterval = null;
     let activeVideoId = null;
     let activePlaylistId = null;
-    const bc = new BroadcastChannel('yt_lets_watch_channel_v18');
+    const bc = new BroadcastChannel('yt_lets_watch_channel_v19');
 
     bc.onmessage = (event) => {
       if (event.data && event.data.type === 'STATE_UPDATE') {
@@ -332,7 +332,7 @@
     }
 
     function loadState() {
-      const saved = localStorage.getItem('yt_lets_watch_state_v18');
+      const saved = localStorage.getItem('yt_lets_watch_state_v19');
       if (saved) {
         try { state = JSON.parse(saved); } catch(e) {}
       }
@@ -341,7 +341,7 @@
 
     function saveState() {
       autoPromoteQueue();
-      localStorage.setItem('yt_lets_watch_state_v18', JSON.stringify(state));
+      localStorage.setItem('yt_lets_watch_state_v19', JSON.stringify(state));
       bc.postMessage({ type: 'STATE_UPDATE', state: state });
       renderAll();
     }
@@ -564,21 +564,24 @@
       if (state.chatBotEnabled) {
         const trimmed = message.trim();
         
-        if (trimmed.startsWith('!request ')) {
-          const urlToRequest = trimmed.replace('!request ', '').trim();
+        if (trimmed.toLowerCase().startsWith('!request ')) {
+          const urlToRequest = trimmed.substring(9).trim();
           if (urlToRequest) {
             await addLinksToQueue(urlToRequest, username);
+            state.chatLog.push({ user: 'Bot', tag: 'success', text: `@${username} successfully added item to queue!` });
           }
-        } else if (trimmed === '!fullscreen') {
+        } else if (trimmed.toLowerCase() === '!fullscreen') {
           state.isFullScreen = !state.isFullScreen;
-        } else if (trimmed === '!skip') {
+          state.chatLog.push({ user: 'Bot', tag: 'info', text: `Full screen reaction mode toggled ${state.isFullScreen ? 'ON' : 'OFF'}.` });
+        } else if (trimmed.toLowerCase() === '!skip') {
           playNext();
-        } else if (trimmed === '!queue') {
+          state.chatLog.push({ user: 'Bot', tag: 'info', text: `@${username} skipped current video.` });
+        } else if (trimmed.toLowerCase() === '!queue') {
           const count = state.queue.length + (state.current ? 1 : 0);
-          state.chatLog.push({ user: 'Bot', text: `Queue has ${count} item(s).` });
-        } else if (trimmed === '!np') {
-          const npText = state.current ? `Now Playing: ${state.current.title} [${state.current.creator}]` : `No video currently playing.`;
-          state.chatLog.push({ user: 'Bot', text: npText });
+          state.chatLog.push({ user: 'Bot', tag: 'info', text: `Queue currently has ${count} item(s).` });
+        } else if (trimmed.toLowerCase() === '!np') {
+          const npText = state.current ? `Now Playing: ${state.current.title} [Creator: ${state.current.creator}]` : `No video currently playing.`;
+          state.chatLog.push({ user: 'Bot', tag: 'info', text: npText });
         }
       }
 
@@ -800,7 +803,7 @@
     });
 
     window.addEventListener('storage', (e) => {
-      if (e.key === 'yt_lets_watch_state_v18') {
+      if (e.key === 'yt_lets_watch_state_v19') {
         loadState();
         renderAll();
       }

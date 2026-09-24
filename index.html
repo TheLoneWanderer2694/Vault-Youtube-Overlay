@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>YouTube</title>
+<title>YouTube Let's Watch & Full Screen Reaction Mode</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <style>
@@ -176,14 +176,14 @@
             <div class="space-y-1 text-[11px] text-slate-300 font-mono">
               <div class="flex justify-between items-center bg-slate-900/80 px-2 py-1 rounded">
                 <span class="text-purple-300 font-bold">!request &lt;url&gt;</span>
-                <span class="text-slate-400 text-[10px]">Add video</span>
+                <span class="text-slate-400 text-[10px]">Add video/playlist</span>
               </div>
               <div class="flex justify-between items-center bg-slate-900/80 px-2 py-1 rounded">
                 <span class="text-purple-300 font-bold">!fullscreen</span>
                 <span class="text-slate-400 text-[10px]">Toggle full screen</span>
               </div>
               <div class="flex justify-between items-center bg-slate-900/80 px-2 py-1 rounded">
-                <span class="text-purple-300 font-bold">!skip / !queue</span>
+                <span class="text-purple-300 font-bold">!skip / !queue / !np</span>
                 <span class="text-slate-400 text-[10px]">Queue controls</span>
               </div>
             </div>
@@ -194,8 +194,16 @@
             <label class="block text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Simulate Incoming Chat Message</label>
             <div class="flex gap-2">
               <input type="text" id="sim-user-input" placeholder="Username" value="SuperFan99" class="w-1/3 bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-purple-500">
-              <input type="text" id="sim-msg-input" placeholder="e.g. !fullscreen" onkeypress="if(event.key==='Enter') submitSimulatedChat()" class="flex-1 bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-purple-500">
+              <input type="text" id="sim-msg-input" placeholder="e.g. !request https://youtu.be/..." onkeypress="if(event.key==='Enter') submitSimulatedChat()" class="flex-1 bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-purple-500">
               <button onclick="submitSimulatedChat()" class="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition">Send</button>
+            </div>
+          </div>
+
+          <!-- Live Chat Log Box -->
+          <div class="mt-3">
+            <label class="block text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Live Chat Activity Log</label>
+            <div id="chat-activity-log" class="bg-slate-950 border border-slate-800 rounded-lg p-2 h-28 overflow-y-auto space-y-1 font-mono text-[11px]">
+              <div class="text-slate-500 italic">No chat messages yet...</div>
             </div>
           </div>
         </div>
@@ -282,7 +290,7 @@
     let mockChatInterval = null;
     let activeVideoId = null;
     let activePlaylistId = null;
-    const bc = new BroadcastChannel('yt_lets_watch_channel_v17');
+    const bc = new BroadcastChannel('yt_lets_watch_channel_v18');
 
     bc.onmessage = (event) => {
       if (event.data && event.data.type === 'STATE_UPDATE') {
@@ -324,7 +332,7 @@
     }
 
     function loadState() {
-      const saved = localStorage.getItem('yt_lets_watch_state_v17');
+      const saved = localStorage.getItem('yt_lets_watch_state_v18');
       if (saved) {
         try { state = JSON.parse(saved); } catch(e) {}
       }
@@ -333,7 +341,7 @@
 
     function saveState() {
       autoPromoteQueue();
-      localStorage.setItem('yt_lets_watch_state_v17', JSON.stringify(state));
+      localStorage.setItem('yt_lets_watch_state_v18', JSON.stringify(state));
       bc.postMessage({ type: 'STATE_UPDATE', state: state });
       renderAll();
     }
@@ -359,12 +367,14 @@
     async function fetchVideoDetails(url, fallbackCreator = "") {
       const videoId = extractVideoId(url);
       const playlistId = extractPlaylistId(url);
+      const creatorName = fallbackCreator && fallbackCreator.trim().length > 0 ? fallbackCreator.trim() : "Featured Creator";
 
       if (playlistId && !videoId) {
+        let playlistTitle = `YouTube Playlist (${playlistId})`;
         return {
           id: Math.random().toString(36).substring(2, 9),
-          title: `YouTube Playlist (${playlistId})`,
-          creator: fallbackCreator || "Playlist Feed",
+          title: playlistTitle,
+          creator: creatorName,
           url: url,
           videoId: null,
           playlistId: playlistId
@@ -375,13 +385,13 @@
         return { 
           id: Math.random().toString(36).substring(2, 9),
           title: url, 
-          creator: fallbackCreator || "Featured Creator", 
+          creator: creatorName, 
           url: url,
           videoId: null
         };
       }
 
-      let creatorName = fallbackCreator;
+      let detectedCreator = creatorName;
       let videoTitle = `YouTube Video (${videoId})`;
 
       try {
@@ -389,18 +399,16 @@
         if (response.ok) {
           const data = await response.json();
           if (data.title) videoTitle = data.title;
-          if (!creatorName && data.author_name) creatorName = data.author_name;
+          if ((!fallbackCreator || fallbackCreator === "Featured Creator") && data.author_name) {
+            detectedCreator = data.author_name;
+          }
         }
       } catch (err) {}
-
-      if (!creatorName || creatorName.toLowerCase() === "unknown youtuber") {
-        creatorName = "Featured Creator";
-      }
 
       return {
         id: Math.random().toString(36).substring(2, 9),
         title: videoTitle,
-        creator: creatorName,
+        creator: detectedCreator,
         url: url,
         videoId: videoId
       };
@@ -412,7 +420,7 @@
 
       if (overrideTargetUrl) {
         inputVal = overrideTargetUrl;
-        defaultOverride = overrideCreator || "Chat User";
+        defaultOverride = overrideCreator || "Chat Viewer";
       } else {
         const inputEl = document.getElementById('batch-links-input');
         const creatorEl = document.getElementById('override-creator');
@@ -527,10 +535,10 @@
         mockChatInterval = setInterval(() => {
           const randomViewers = ['PixelGamer', 'RetroFan', 'SpeedrunnerX', 'ChillViewer'];
           const randomViewer = randomViewers[Math.floor(Math.random() * randomViewers.length)];
-          const sampleMessages = ['!fullscreen', '!queue', 'Great video!'];
+          const sampleMessages = ['!fullscreen', '!queue', '!np', 'Awesome stream!'];
           const sampleMsg = sampleMessages[Math.floor(Math.random() * sampleMessages.length)];
           handleChatMessage(randomViewer, sampleMsg);
-        }, 22000);
+        }, 25000);
 
       } else {
         state.chatConnected = false;
@@ -551,21 +559,27 @@
     async function handleChatMessage(username, message) {
       if (!state.chatLog) state.chatLog = [];
       state.chatLog.push({ user: username, text: message });
-      if (state.chatLog.length > 30) state.chatLog.shift();
+      if (state.chatLog.length > 40) state.chatLog.shift();
 
-      if (!state.chatBotEnabled) {
-        saveState();
-        return;
-      }
-
-      const trimmed = message.trim();
-      if (trimmed.startsWith('!request ')) {
-        const urlToRequest = trimmed.replace('!request ', '').trim();
-        await addLinksToQueue(urlToRequest, username);
-      } else if (trimmed === '!fullscreen') {
-        state.isFullScreen = !state.isFullScreen;
-      } else if (trimmed === '!skip') {
-        playNext();
+      if (state.chatBotEnabled) {
+        const trimmed = message.trim();
+        
+        if (trimmed.startsWith('!request ')) {
+          const urlToRequest = trimmed.replace('!request ', '').trim();
+          if (urlToRequest) {
+            await addLinksToQueue(urlToRequest, username);
+          }
+        } else if (trimmed === '!fullscreen') {
+          state.isFullScreen = !state.isFullScreen;
+        } else if (trimmed === '!skip') {
+          playNext();
+        } else if (trimmed === '!queue') {
+          const count = state.queue.length + (state.current ? 1 : 0);
+          state.chatLog.push({ user: 'Bot', text: `Queue has ${count} item(s).` });
+        } else if (trimmed === '!np') {
+          const npText = state.current ? `Now Playing: ${state.current.title} [${state.current.creator}]` : `No video currently playing.`;
+          state.chatLog.push({ user: 'Bot', text: npText });
+        }
       }
 
       saveState();
@@ -674,6 +688,23 @@
         if (fullscreenToggleBtn) fullscreenToggleBtn.className = "bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg text-xs font-semibold transition border border-slate-700 flex items-center gap-1.5";
       }
 
+      // Render Chat Log Activity
+      const chatLogContainer = document.getElementById('chat-activity-log');
+      if (chatLogContainer) {
+        if (!state.chatLog || state.chatLog.length === 0) {
+          chatLogContainer.innerHTML = `<div class="text-slate-500 italic">No chat messages yet...</div>`;
+        } else {
+          let logHtml = '';
+          state.chatLog.forEach(item => {
+            const isBot = item.user === 'Bot';
+            const userColor = isBot ? 'text-purple-400 font-bold' : 'text-blue-400 font-semibold';
+            logHtml += `<div><span class="${userColor}">[${item.user}]:</span> <span class="text-slate-300">${item.text}</span></div>`;
+          });
+          chatLogContainer.innerHTML = logHtml;
+          chatLogContainer.scrollTop = chatLogContainer.scrollHeight;
+        }
+      }
+
       const controlList = document.getElementById('control-queue-list');
       const counterBadge = document.getElementById('queue-counter');
       if (counterBadge) counterBadge.innerText = `${state.queue.length + (state.current ? 1 : 0)} items`;
@@ -688,7 +719,7 @@
               <div class="flex items-center justify-between bg-red-950/30 border border-red-500/30 p-2.5 rounded-lg text-xs">
                 <div class="flex items-center gap-2 truncate">
                   <span class="bg-red-600 text-white text-[10px] px-1.5 py-0.5 rounded font-bold uppercase shrink-0">Playing</span>
-                  <span class="text-blue-400 font-semibold shrink-0">[${state.current.creator}]</span>
+                  <span class="bg-blue-950 text-blue-400 px-2 py-0.5 rounded text-[11px] font-semibold shrink-0 border border-blue-800/50"><i class="fa-solid fa-user-tag text-[9px]"></i> ${state.current.creator}</span>
                   <span class="font-medium text-white truncate">${state.current.title}</span>
                 </div>
                 <span class="text-slate-500 text-[10px] shrink-0 ml-2">Active</span>
@@ -700,7 +731,7 @@
               <div class="flex items-center justify-between bg-slate-900/80 border border-slate-800 p-2.5 rounded-lg text-xs">
                 <div class="flex items-center gap-2 truncate">
                   <span class="bg-slate-800 text-slate-400 text-[10px] px-1.5 py-0.5 rounded font-mono shrink-0">#${idx + 1}</span>
-                  <span class="text-blue-400/90 font-medium shrink-0">[${item.creator}]</span>
+                  <span class="bg-blue-950/80 text-blue-300 px-2 py-0.5 rounded text-[11px] font-semibold shrink-0 border border-blue-900/50"><i class="fa-solid fa-user-tag text-[9px]"></i> ${item.creator}</span>
                   <span class="text-slate-200 truncate">${item.title}</span>
                 </div>
                 <div class="flex items-center gap-1.5 shrink-0 ml-2">
@@ -769,7 +800,7 @@
     });
 
     window.addEventListener('storage', (e) => {
-      if (e.key === 'yt_lets_watch_state_v17') {
+      if (e.key === 'yt_lets_watch_state_v18') {
         loadState();
         renderAll();
       }

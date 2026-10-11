@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>YouTube Let's Watch Queue Manager</title>
+<title>YouTube Let's Watch Queue & Saved Playlists</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <style>
@@ -53,9 +53,9 @@
     <div class="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-800 pb-4 mb-6 gap-4">
       <div>
         <h1 class="text-2xl font-bold flex items-center gap-2 text-red-500">
-          <i class="fa-brands fa-youtube"></i> Let's Watch Queue Manager
+          <i class="fa-brands fa-youtube"></i> Let's Watch Queue & Saved Playlists
         </h1>
-        <p class="text-sm text-slate-400">Manage queue, playlists, and creator tags for your stream overlay with auto-looping.</p>
+        <p class="text-sm text-slate-400">Manage queue, auto-looping playlists, and save your custom queues locally in browser storage.</p>
       </div>
       <div class="flex items-center gap-3">
         <button onclick="toggleObsMode()" class="bg-slate-800 hover:bg-slate-700 text-xs px-3 py-2 rounded-lg font-medium transition border border-slate-700 flex items-center gap-2">
@@ -99,24 +99,24 @@
         </div>
       </div>
 
-      <!-- Right Col: Queue Quick Controls -->
-      <div class="bg-slate-900/60 border border-slate-800/80 rounded-xl p-4 flex flex-col justify-between">
+      <!-- Right Col: Saved Playlists Manager & Controls -->
+      <div class="bg-slate-900/60 border border-slate-800/80 rounded-xl p-4 flex flex-col justify-between space-y-4">
         <div>
           <div class="flex items-center justify-between mb-3 border-b border-slate-800 pb-2">
             <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
-              <i class="fa-solid fa-sliders text-red-500"></i> Queue Control Panel
+              <i class="fa-solid fa-bookmark text-red-500"></i> Saved Playlists
             </h3>
           </div>
 
-          <div class="space-y-3 text-xs text-slate-300 mb-6">
-            <p class="text-slate-400 leading-relaxed">
-              When the final video in your queue finishes playing, the queue automatically loops back to the start and keeps playing indefinitely.
-            </p>
-            <div class="bg-slate-950/80 border border-slate-800 p-3 rounded-lg space-y-2">
-              <div class="text-[11px] font-semibold text-slate-200">Looping Status:</div>
-              <div class="flex items-center gap-2 text-[11px] text-emerald-400">
-                <i class="fa-solid fa-rotate animate-spin"></i> Auto-Loop Enabled (History Preserved)
-              </div>
+          <div class="space-y-3 mb-4">
+            <div class="flex gap-2">
+              <input type="text" id="save-playlist-name" placeholder="My Playlist Name" class="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-red-500 text-slate-200">
+              <button onclick="saveCurrentPlaylist()" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-3 py-1.5 rounded-lg font-medium transition shrink-0 flex items-center gap-1">
+                <i class="fa-solid fa-floppy-disk"></i> Save
+              </button>
+            </div>
+            <div id="saved-playlists-list" class="space-y-2 max-h-40 overflow-y-auto pr-1">
+              <div class="text-[11px] text-slate-500 italic text-center py-2">No saved playlists yet</div>
             </div>
           </div>
         </div>
@@ -154,8 +154,7 @@
       <!-- Now Playing Box -->
       <div class="bg-gradient-to-r from-red-950/40 to-slate-900/80 border border-red-500/30 rounded-xl p-3 flex flex-col flex-1">
         <div class="text-[10px] font-semibold text-red-400 uppercase tracking-wider mb-1.5 flex items-center justify-between shrink-0">
-          <span class="flex items-center gap-1.5"><i class="fa-solid fa-play text-[8px]"></i> Now Watching (Looping Active)</span>
-          <span id="player-status-badge" class="text-[9px] bg-red-900/60 text-red-300 px-1.5 py-0.5 rounded font-mono">Inactive</span>
+          <span class="flex items-center gap-1.5"><i class="fa-solid fa-play text-[8px]"></i> Now Watching</span>
         </div>
         
         <div class="mb-2 flex items-center gap-2 shrink-0">
@@ -193,11 +192,13 @@
       history: []
     };
 
+    let savedPlaylists = [];
+
     let player = null;
     let isObserverMode = false;
     let activeVideoId = null;
     let activePlaylistId = null;
-    const bc = new BroadcastChannel('yt_lets_watch_channel_loop_v22');
+    const bc = new BroadcastChannel('yt_lets_watch_channel_loop_v24');
 
     bc.onmessage = (event) => {
       if (event.data && event.data.type === 'STATE_UPDATE') {
@@ -234,20 +235,73 @@
     }
 
     function loadState() {
-      const saved = localStorage.getItem('yt_lets_watch_state_loop_v22');
+      const saved = localStorage.getItem('yt_lets_watch_state_loop_v24');
       if (saved) {
         try { 
           state = JSON.parse(saved);
         } catch(e) {}
       }
+      
+      const savedPlaylistsData = localStorage.getItem('yt_lets_watch_saved_playlists_v24');
+      if (savedPlaylistsData) {
+        try {
+          savedPlaylists = JSON.parse(savedPlaylistsData);
+        } catch(e) {}
+      }
+
       autoPromoteQueue();
     }
 
     function saveState() {
       autoPromoteQueue();
-      localStorage.setItem('yt_lets_watch_state_loop_v22', JSON.stringify(state));
+      localStorage.setItem('yt_lets_watch_state_loop_v24', JSON.stringify(state));
+      localStorage.setItem('yt_lets_watch_saved_playlists_v24', JSON.stringify(savedPlaylists));
       bc.postMessage({ type: 'STATE_UPDATE', state: state });
       renderAll();
+    }
+
+    function saveCurrentPlaylist() {
+      const nameInput = document.getElementById('save-playlist-name');
+      const name = nameInput ? nameInput.value.trim() : '';
+      if (!name) {
+        alert("Please enter a name for your saved playlist.");
+        return;
+      }
+
+      const allItems = [];
+      if (state.current) allItems.push(state.current);
+      if (state.queue) allItems.push(...state.queue);
+      if (allItems.length === 0) {
+        alert("Queue is empty. Add some videos or playlists before saving.");
+        return;
+      }
+
+      savedPlaylists.push({
+        id: Math.random().toString(36).substring(2, 9),
+        name: name,
+        items: allItems
+      });
+
+      if (nameInput) nameInput.value = '';
+      saveState();
+    }
+
+    function loadSavedPlaylist(id) {
+      const target = savedPlaylists.find(p => p.id === id);
+      if (!target) return;
+
+      const clonedItems = JSON.parse(JSON.stringify(target.items));
+      state.current = clonedItems.shift() || null;
+      state.queue = clonedItems;
+      state.history = [];
+
+      saveState();
+      updatePlayerInstance();
+    }
+
+    function deleteSavedPlaylist(id) {
+      savedPlaylists = savedPlaylists.filter(p => p.id !== id);
+      saveState();
     }
 
     function autoPromoteQueue() {
@@ -257,7 +311,6 @@
         if (state.current) state.history.push(state.current);
         state.current = state.queue.shift();
       } else if (!state.current && state.queue.length === 0 && state.history.length > 0) {
-        // Loop complete: recycle history back into queue!
         state.queue = [...state.history];
         state.history = [];
         state.current = state.queue.shift();
@@ -382,7 +435,6 @@
       if (state.queue.length > 0) {
         state.current = state.queue.shift();
       } else if (state.history.length > 0) {
-        // Loop queue when empty
         state.queue = [...state.history];
         state.history = [];
         state.current = state.queue.shift();
@@ -531,27 +583,40 @@
         }
       }
 
+      // Render Saved Playlists list
+      const savedListContainer = document.getElementById('saved-playlists-list');
+      if (savedListContainer) {
+        if (savedPlaylists.length === 0) {
+          savedListContainer.innerHTML = `<div class="text-[11px] text-slate-500 italic text-center py-2">No saved playlists yet</div>`;
+        } else {
+          let savedHtml = '';
+          savedPlaylists.forEach(playlist => {
+            savedHtml += `
+              <div class="flex items-center justify-between bg-slate-950/60 border border-slate-800 px-2.5 py-1.5 rounded-lg text-xs">
+                <span class="font-medium text-slate-200 truncate mr-2" title="${playlist.name}">${playlist.name}</span>
+                <div class="flex items-center gap-1 shrink-0">
+                  <button onclick="loadSavedPlaylist('${playlist.id}')" title="Load Playlist" class="bg-slate-800 hover:bg-indigo-600 hover:text-white text-[10px] px-2 py-1 rounded text-slate-300 transition"><i class="fa-solid fa-folder-open"></i></button>
+                  <button onclick="deleteSavedPlaylist('${playlist.id}')" title="Delete Playlist" class="bg-slate-800 hover:bg-rose-600 hover:text-white text-[10px] px-2 py-1 rounded text-slate-300 transition"><i class="fa-solid fa-trash"></i></button>
+                </div>
+              </div>
+            `;
+          });
+          savedListContainer.innerHTML = savedHtml;
+        }
+      }
+
       const overlayCount = document.getElementById('overlay-count');
       if (overlayCount) overlayCount.innerText = `${state.queue.length} upcoming`;
       
       const titleEl = document.getElementById('overlay-current-title');
       const creatorEl = document.getElementById('overlay-current-creator');
-      const statusBadge = document.getElementById('player-status-badge');
       
       if (state.current) {
         if (titleEl) titleEl.innerText = state.current.title;
         if (creatorEl) creatorEl.innerText = state.current.creator;
-        if (statusBadge) {
-          statusBadge.innerText = state.current.playlistId ? "Playlist Looping" : "Auto-Queue Loop";
-          statusBadge.className = "text-[9px] bg-emerald-900/60 text-emerald-300 px-1.5 py-0.5 rounded font-mono";
-        }
       } else {
         if (titleEl) titleEl.innerText = "No video playing";
         if (creatorEl) creatorEl.innerText = "Waiting in queue";
-        if (statusBadge) {
-          statusBadge.innerText = "Inactive";
-          statusBadge.className = "text-[9px] bg-red-900/60 text-red-300 px-1.5 py-0.5 rounded font-mono";
-        }
       }
 
       const overlayUpcoming = document.getElementById('overlay-upcoming-list');
@@ -586,7 +651,7 @@
     });
 
     window.addEventListener('storage', (e) => {
-      if (e.key === 'yt_lets_watch_state_loop_v22') {
+      if (e.key === 'yt_lets_watch_state_loop_v24' || e.key === 'yt_lets_watch_saved_playlists_v24') {
         loadState();
         renderAll();
       }

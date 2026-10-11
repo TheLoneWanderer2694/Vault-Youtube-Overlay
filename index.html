@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>YouTube Let's Watch</title>
+<title>YouTube Let's Watch Queue & Saved Playlists</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <style>
@@ -333,47 +333,60 @@
     async function fetchPlaylistVideos(playlistId, fallbackCreator) {
       const videos = [];
       try {
-        const response = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/playlist?list=${playlistId}&format=json`);
         let playlistCreator = fallbackCreator && fallbackCreator !== "Featured Creator" ? fallbackCreator : "Playlist Author";
-        if (response.ok) {
-          const data = await response.json();
-          if (data.author_name && (!fallbackCreator || fallbackCreator === "Featured Creator")) {
-            playlistCreator = data.author_name;
+        
+        // Try multiple CORS proxy fallback services and public scrapers to get all playlist videos reliably
+        const rssUrl = `https://www.youtube.com/feeds/videos.xml?playlist_id=${playlistId}`;
+        const proxies = [
+          `https://api.allorigins.win/get?url=${encodeURIComponent(rssUrl)}`,
+          `https://corsproxy.io/?${encodeURIComponent(rssUrl)}`,
+          `https://thingproxy.freeboard.io/fetch/${rssUrl}`
+        ];
+
+        let xmlText = null;
+        for (const proxyUrl of proxies) {
+          try {
+            const rssResponse = await fetch(proxyUrl);
+            if (rssResponse.ok) {
+              const data = await rssResponse.json();
+              if (data && data.contents) {
+                xmlText = data.contents;
+                break;
+              } else if (typeof data === 'string') {
+                xmlText = data;
+                break;
+              }
+            }
+          } catch(err) {
+            continue;
           }
         }
 
-        // Fetch RSS feed via cors proxy to extract individual video IDs and titles
-        const rssUrl = `https://www.youtube.com/feeds/videos.xml?playlist_id=${playlistId}`;
-        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(rssUrl)}`;
-        const rssResponse = await fetch(proxyUrl);
-        if (rssResponse.ok) {
-          const proxyData = await rssResponse.json();
-          if (proxyData.contents) {
-            const parser = new DOMParser();
-            const xmlDoc = parser.parseFromString(proxyData.contents, "text/xml");
-            const entries = xmlDoc.getElementsByTagName("entry");
+        if (xmlText) {
+          const parser = new DOMParser();
+          const xmlDoc = parser.parseFromString(xmlText, "text/xml");
+          const entries = xmlDoc.getElementsByTagName("entry");
 
-            for (let i = 0; i < entries.length; i++) {
-              const entry = entries[i];
-              const videoId = entry.getElementsByTagName("yt:videoId")[0]?.textContent;
-              const title = entry.getElementsByTagName("title")[0]?.textContent || `Video ${i+1}`;
-              const author = entry.getElementsByTagName("author")[0]?.getElementsByTagName("name")[0]?.textContent || playlistCreator;
+          for (let i = 0; i < entries.length; i++) {
+            const entry = entries[i];
+            const videoId = entry.getElementsByTagName("yt:videoId")[0]?.textContent;
+            const title = entry.getElementsByTagName("title")[0]?.textContent || `Video ${i+1}`;
+            const author = entry.getElementsByTagName("author")[0]?.getElementsByTagName("name")[0]?.textContent || playlistCreator;
 
-              if (videoId) {
-                videos.push({
-                  id: Math.random().toString(36).substring(2, 9),
-                  title: title,
-                  creator: fallbackCreator && fallbackCreator !== "Featured Creator" ? fallbackCreator : author,
-                  url: `https://www.youtube.com/watch?v=${videoId}`,
-                  videoId: videoId
-                });
-              }
+            if (videoId) {
+              videos.push({
+                id: Math.random().toString(36).substring(2, 9),
+                title: title,
+                creator: fallbackCreator && fallbackCreator !== "Featured Creator" ? fallbackCreator : author,
+                url: `https://www.youtube.com/watch?v=${videoId}`,
+                videoId: videoId
+              });
             }
           }
         }
       } catch (err) {}
 
-      // Fallback if rss parsing yielded no videos
+      // Fallback if RSS parsing failed completely
       if (videos.length === 0) {
         videos.push({
           id: Math.random().toString(36).substring(2, 9),

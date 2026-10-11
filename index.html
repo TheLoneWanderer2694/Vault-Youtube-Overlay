@@ -100,9 +100,10 @@
         </div>
       </div>
 
-      <!-- Right Col: Saved Playlists Manager & Controls -->
+      <!-- Right Col: Saved Playlists Manager & Channel Filter Manager -->
       <div class="bg-slate-900/60 border border-slate-800/80 rounded-xl p-4 flex flex-col justify-between space-y-4">
         <div>
+          <!-- Saved Playlists Section -->
           <div class="flex items-center justify-between mb-3 border-b border-slate-800 pb-2">
             <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
               <i class="fa-solid fa-bookmark text-red-500"></i> Saved Playlists
@@ -116,8 +117,35 @@
                 <i class="fa-solid fa-floppy-disk"></i> Save
               </button>
             </div>
-            <div id="saved-playlists-list" class="space-y-2 max-h-40 overflow-y-auto pr-1">
+            <div id="saved-playlists-list" class="space-y-2 max-h-32 overflow-y-auto pr-1">
               <div class="text-[11px] text-slate-500 italic text-center py-2">No saved playlists yet</div>
+            </div>
+          </div>
+
+          <!-- Channel Filter / Whitelist Section -->
+          <div class="flex items-center justify-between mb-3 border-b border-slate-800 pb-2 pt-2">
+            <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-300 flex items-center gap-1.5" title="Filter queue to play only from specified YouTuber channel URLs">
+              <i class="fa-solid fa-filter text-blue-500"></i> Channel Whitelist Filter
+            </h3>
+            <span id="whitelist-status" class="text-[10px] text-slate-400">Off</span>
+          </div>
+
+          <div class="space-y-2">
+            <div class="flex gap-2">
+              <input type="text" id="channel-filter-input" placeholder="e.g. https://youtube.com/@CreatorName" class="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-blue-500 text-slate-200">
+              <button onclick="addChannelFilter()" class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-1.5 rounded-lg font-medium transition shrink-0 flex items-center gap-1">
+                <i class="fa-solid fa-plus"></i> Add
+              </button>
+            </div>
+            <div class="flex items-center justify-between">
+              <label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer select-none">
+                <input type="checkbox" id="whitelist-toggle" onchange="toggleWhitelistMode()" class="rounded bg-slate-950 border-slate-800 text-blue-600 focus:ring-0">
+                <span>Enforce Whitelist Check</span>
+              </label>
+              <button onclick="clearChannelFilters()" class="text-[10px] text-slate-400 hover:text-rose-400 transition">Clear All</button>
+            </div>
+            <div id="channel-filters-list" class="space-y-1.5 max-h-28 overflow-y-auto pr-1 mt-2">
+              <div class="text-[11px] text-slate-500 italic text-center py-1">No whitelisted channels</div>
             </div>
           </div>
         </div>
@@ -194,7 +222,8 @@
     };
 
     let savedPlaylists = [];
-
+    let whitelistedChannels = [];
+    let isWhitelistActive = false;
     let player = null;
     let isObserverMode = false;
     let activeVideoId = null;
@@ -250,6 +279,15 @@
         } catch(e) {}
       }
 
+      const savedWhitelistData = localStorage.getItem('yt_lets_watch_whitelist_channels_v24');
+      if (savedWhitelistData) {
+        try {
+          const parsed = JSON.parse(savedWhitelistData);
+          whitelistedChannels = parsed.channels || [];
+          isWhitelistActive = parsed.active || false;
+        } catch(e) {}
+      }
+
       autoPromoteQueue();
     }
 
@@ -257,15 +295,59 @@
       autoPromoteQueue();
       localStorage.setItem('yt_lets_watch_state_loop_v24', JSON.stringify(state));
       localStorage.setItem('yt_lets_watch_saved_playlists_v24', JSON.stringify(savedPlaylists));
+      localStorage.setItem('yt_lets_watch_whitelist_channels_v24', JSON.stringify({
+        channels: whitelistedChannels,
+        active: isWhitelistActive
+      }));
+
       bc.postMessage({ type: 'STATE_UPDATE', state: state });
       renderAll();
+    }
+
+    function addChannelFilter() {
+      const inputEl = document.getElementById('channel-filter-input');
+      const val = inputEl ? inputEl.value.trim() : '';
+      if (!val) return;
+
+      if (!whitelistedChannels.includes(val)) {
+        whitelistedChannels.push(val);
+      }
+      if (inputEl) inputEl.value = '';
+      saveState();
+    }
+
+    function removeChannelFilter(index) {
+      whitelistedChannels.splice(index, 1);
+      saveState();
+    }
+
+    function clearChannelFilters() {
+      whitelistedChannels = [];
+      saveState();
+    }
+
+    function toggleWhitelistMode() {
+      const toggleEl = document.getElementById('whitelist-toggle');
+      isWhitelistActive = toggleEl ? toggleEl.checked : false;
+      saveState();
+    }
+
+    function isChannelAllowed(creatorName) {
+      if (!isWhitelistActive || whitelistedChannels.length === 0) return true;
+      if (!creatorName) return false;
+      const lowerCreator = creatorName.toLowerCase();
+      
+      return whitelistedChannels.some(channel => {
+        const cleanChan = channel.replace(/^https?:\/\/(www\.)?youtube\.com\/(@?[\w\-]+).*/i, '$2').toLowerCase().replace('@', '');
+        const cleanCreator = lowerCreator.replace('@', '').trim();
+        return cleanCreator.includes(cleanChan) || cleanChan.includes(cleanCreator);
+      });
     }
 
     function saveCurrentPlaylist() {
       const nameInput = document.getElementById('save-playlist-name');
       const name = nameInput ? nameInput.value.trim() : '';
       if (!name) {
-        alert("Please enter a name for your saved playlist.");
         return;
       }
 
@@ -273,7 +355,6 @@
       if (state.current) allItems.push(state.current);
       if (state.queue) allItems.push(...state.queue);
       if (allItems.length === 0) {
-        alert("Queue is empty. Add some videos or playlists before saving.");
         return;
       }
 
@@ -291,7 +372,12 @@
       const target = savedPlaylists.find(p => p.id === id);
       if (!target) return;
 
-      const clonedItems = JSON.parse(JSON.stringify(target.items));
+      let clonedItems = JSON.parse(JSON.stringify(target.items));
+      
+      if (isWhitelistActive && whitelistedChannels.length > 0) {
+        clonedItems = clonedItems.filter(item => isChannelAllowed(item.creator));
+      }
+
       state.current = clonedItems.shift() || null;
       state.queue = clonedItems;
       state.history = [];
@@ -316,6 +402,11 @@
         state.history = [];
         state.current = state.queue.shift();
       }
+
+      // Filter current if whitelist turned on and current doesn't match
+      if (isWhitelistActive && whitelistedChannels.length > 0 && state.current && !isChannelAllowed(state.current.creator)) {
+        playNext();
+      }
     }
 
     function extractVideoId(url) {
@@ -334,13 +425,11 @@
       const videos = [];
       try {
         let playlistCreator = fallbackCreator && fallbackCreator !== "Featured Creator" ? fallbackCreator : "Playlist Author";
-        
-        // Use a more robust scraping approach via multiple reliable CORS proxies and HTML scraping for playlists
         const playlistUrl = `https://www.youtube.com/playlist?list=${playlistId}`;
         const proxies = [
           `https://api.allorigins.win/get?url=${encodeURIComponent(playlistUrl)}`,
           `https://corsproxy.io/?${encodeURIComponent(playlistUrl)}`,
-          `https://thingproxy.freeboard.io/fetch/${playlistUrl}`
+          `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(playlistUrl)}`
         ];
 
         let htmlText = null;
@@ -363,103 +452,117 @@
         }
 
         if (htmlText) {
-          // Extract ytInitialData json from the YouTube playlist page markup
-          const match = htmlText.match(/var ytInitialData = ({.*?});<\/script>/s) || htmlText.match(/window\["ytInitialData"\] = ({.*?});<\/script>/s);
-          if (match && match[1]) {
-            try {
-              const ytData = JSON.parse(match[1]);
-              const tabs = ytData.contents?.twoColumnBrowseResultsRenderer?.tabs;
-              if (tabs) {
-                for (const tab of tabs) {
-                  const tabRenderer = tab.tabRenderer;
-                  if (tabRenderer && tabRenderer.content) {
-                    const sectionList = tabRenderer.content.sectionListRenderer?.contents;
-                    if (sectionList) {
-                      for (const section of sectionList) {
-                        const itemSection = section.itemSectionRenderer?.contents;
-                        if (itemSection) {
-                          for (const item of itemSection) {
-                            const playlistRenderer = item.playlistVideoListRenderer;
-                            if (playlistRenderer && playlistRenderer.contents) {
-                              for (const videoRendererItem of playlistRenderer.contents) {
-                                const vData = videoRendererItem.playlistVideoRenderer;
-                                if (vData && vData.videoId) {
-                                  const vId = vData.videoId;
-                                  const vTitle = vData.title?.runs?.[0]?.text || `Video`;
-                                  const vAuthor = vData.shortBylineText?.runs?.[0]?.text || playlistCreator;
+          // Robust deep web scraping for YouTube playlist items and metadata
+          const foundItems = new Map();
 
-                                  videos.push({
-                                    id: Math.random().toString(36).substring(2, 9),
-                                    title: vTitle,
-                                    creator: fallbackCreator && fallbackCreator !== "Featured Creator" ? fallbackCreator : vAuthor,
-                                    url: `https://www.youtube.com/watch?v=${vId}`,
-                                    videoId: vId
-                                  });
-                                }
-                              }
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
+          // Match JSON-like structures in ytInitialData or mobile web playlist payloads
+          const jsonRegex = /"playlistVideoRenderer"\s*:\s*\{([^}]+)\}/g;
+          let match;
+          while ((match = jsonRegex.exec(htmlText)) !== null) {
+            const renderer = match[1];
+            const vIdMatch = renderer.match(/"videoId"\s*:\s*"([a-zA-Z0-9_-]{11})"/);
+            const titleMatch = renderer.match(/"title"\s*:\s*\{"runs"\s*:\s*\[\{"text"\s*:\s*"([^"]+)"/);
+            const authorMatch = renderer.match(/"longBylineText"\s*:\s*\{"runs"\s*:\s*\[\{"text"\s*:\s*"([^"]+)"/);
+
+            if (vIdMatch) {
+              const vId = vIdMatch[1];
+              const vTitle = titleMatch ? titleMatch[1] : `YouTube Video (${vId})`;
+              const vAuthor = authorMatch ? authorMatch[1] : playlistCreator;
+              
+              if (!foundItems.has(vId)) {
+                foundItems.set(vId, { title: vTitle, author: vAuthor });
               }
-            } catch(jsonErr) {}
+            }
+          }
+
+          // Fallback regex scan for videoIds and titles if primary renderer pattern misses
+          if (foundItems.size === 0) {
+            const videoIdRegex = /"videoId"\s*:\s*"([a-zA-Z0-9_-]{11})"/g;
+            const titleRegex = /"title"\s*:\s*\{"runs"\s*:\s*\[\{"text"\s*:\s*"([^"]+)"/g;
+            
+            let vMatch;
+            const allIds = [];
+            while ((vMatch = videoIdRegex.exec(htmlText)) !== null) {
+              if (!allIds.includes(vMatch[1])) {
+                allIds.push(vMatch[1]);
+              }
+            }
+
+            let tMatch;
+            const allTitles = [];
+            while ((tMatch = titleRegex.exec(htmlText)) !== null) {
+              const t = tMatch[1];
+              if (t && t.length > 2 && !t.includes("Watch later") && !t.includes("Queue")) {
+                allTitles.push(t);
+              }
+            }
+
+            allIds.forEach((vId, idx) => {
+              const t = allTitles[idx] || `YouTube Video (${vId})`;
+              if (!foundItems.has(vId)) {
+                foundItems.set(vId, { title: t, author: playlistCreator });
+              }
+            });
+          }
+
+          for (const [vId, info] of foundItems.entries()) {
+            const resolvedCreator = fallbackCreator && fallbackCreator !== "Featured Creator" ? fallbackCreator : info.author;
+            if (!isWhitelistActive || isChannelAllowed(resolvedCreator)) {
+              videos.push({
+                id: Math.random().toString(36).substring(2, 9),
+                title: info.title,
+                creator: resolvedCreator,
+                url: `https://www.youtube.com/watch?v=${vId}`,
+                videoId: vId
+              });
+            }
           }
         }
 
-        // Fallback to RSS feed if page JSON scraping yielded no videos
         if (videos.length === 0) {
           const rssUrl = `https://www.youtube.com/feeds/videos.xml?playlist_id=${playlistId}`;
-          const rssProxies = [
-            `https://api.allorigins.win/get?url=${encodeURIComponent(rssUrl)}`,
-            `https://corsproxy.io/?${encodeURIComponent(rssUrl)}`
-          ];
-          for (const proxyUrl of rssProxies) {
-            try {
-              const rssResponse = await fetch(proxyUrl);
-              if (rssResponse.ok) {
-                const data = await rssResponse.json();
-                let xmlText = data.contents || data;
-                if (xmlText) {
-                  const parser = new DOMParser();
-                  const xmlDoc = parser.parseFromString(xmlText, "text/xml");
-                  const entries = xmlDoc.getElementsByTagName("entry");
-                  for (let i = 0; i < entries.length; i++) {
-                    const entry = entries[i];
-                    const videoId = entry.getElementsByTagName("yt:videoId")[0]?.textContent;
-                    const title = entry.getElementsByTagName("title")[0]?.textContent || `Video ${i+1}`;
-                    const author = entry.getElementsByTagName("author")[0]?.getElementsByTagName("name")[0]?.textContent || playlistCreator;
+          const rssResponse = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(rssUrl)}`);
+          if (rssResponse.ok) {
+            const data = await rssResponse.json();
+            let xmlText = data.contents;
+            if (xmlText) {
+              const parser = new DOMParser();
+              const xmlDoc = parser.parseFromString(xmlText, "text/xml");
+              const entries = xmlDoc.getElementsByTagName("entry");
+              for (let i = 0; i < entries.length; i++) {
+                const entry = entries[i];
+                const videoId = entry.getElementsByTagName("yt:videoId")[0]?.textContent;
+                const title = entry.getElementsByTagName("title")[0]?.textContent || `Video ${i+1}`;
+                const author = entry.getElementsByTagName("author")[0]?.getElementsByTagName("name")[0]?.textContent || playlistCreator;
 
-                    if (videoId) {
-                      videos.push({
-                        id: Math.random().toString(36).substring(2, 9),
-                        title: title,
-                        creator: fallbackCreator && fallbackCreator !== "Featured Creator" ? fallbackCreator : author,
-                        url: `https://www.youtube.com/watch?v=${videoId}`,
-                        videoId: videoId
-                      });
-                    }
-                  }
-                  if (videos.length > 0) break;
+                const resolvedCreator = fallbackCreator && fallbackCreator !== "Featured Creator" ? fallbackCreator : author;
+                if (videoId && (!isWhitelistActive || isChannelAllowed(resolvedCreator))) {
+                  videos.push({
+                    id: Math.random().toString(36).substring(2, 9),
+                    title: title,
+                    creator: resolvedCreator,
+                    url: `https://www.youtube.com/watch?v=${videoId}`,
+                    videoId: videoId
+                  });
                 }
               }
-            } catch(e) {}
+            }
           }
         }
       } catch (err) {}
 
-      // Final fallback if all automated parsing fails
       if (videos.length === 0) {
-        videos.push({
-          id: Math.random().toString(36).substring(2, 9),
-          title: `YouTube Playlist (${playlistId})`,
-          creator: fallbackCreator || "Featured Creator",
-          url: `https://www.youtube.com/playlist?list=${playlistId}`,
-          videoId: null,
-          playlistId: playlistId
-        });
+        const resolvedCreator = fallbackCreator || "Featured Creator";
+        if (!isWhitelistActive || isChannelAllowed(resolvedCreator)) {
+          videos.push({
+            id: Math.random().toString(36).substring(2, 9),
+            title: `YouTube Playlist (${playlistId})`,
+            creator: resolvedCreator,
+            url: `https://www.youtube.com/playlist?list=${playlistId}`,
+            videoId: null,
+            playlistId: playlistId
+          });
+        }
       }
 
       return videos;
@@ -475,10 +578,12 @@
       }
 
       if (!videoId) {
+        const resolvedCreator = creatorName;
+        if (isWhitelistActive && !isChannelAllowed(resolvedCreator)) return [];
         return [{ 
           id: Math.random().toString(36).substring(2, 9),
           title: url, 
-          creator: creatorName, 
+          creator: resolvedCreator, 
           url: url,
           videoId: null
         }];
@@ -497,6 +602,10 @@
           }
         }
       } catch (err) {}
+
+      if (isWhitelistActive && !isChannelAllowed(detectedCreator)) {
+        return [];
+      }
 
       return [{
         id: Math.random().toString(36).substring(2, 9),
@@ -572,6 +681,12 @@
         state.current = null;
       }
 
+      // Ensure next complies with whitelist
+      if (isWhitelistActive && whitelistedChannels.length > 0 && state.current && !isChannelAllowed(state.current.creator)) {
+        playNext();
+        return;
+      }
+
       saveState();
       updatePlayerInstance();
     }
@@ -595,6 +710,9 @@
         state.history.push(state.current);
       }
       const target = state.queue.splice(index, 1)[0];
+      if (isWhitelistActive && whitelistedChannels.length > 0 && !isChannelAllowed(target.creator)) {
+        return;
+      }
       state.current = target;
       saveState();
       updatePlayerInstance();
@@ -677,6 +795,33 @@
       const counterBadge = document.getElementById('queue-counter');
       if (counterBadge) counterBadge.innerText = `${state.queue.length + (state.current ? 1 : 0)} items`;
 
+      // Render channel filters list & toggle state
+      const toggleEl = document.getElementById('whitelist-toggle');
+      if (toggleEl) toggleEl.checked = isWhitelistActive;
+      const whitelistStatus = document.getElementById('whitelist-status');
+      if (whitelistStatus) {
+        whitelistStatus.innerText = isWhitelistActive ? "Active" : "Off";
+        whitelistStatus.className = isWhitelistActive ? "text-[10px] text-emerald-400 font-semibold" : "text-[10px] text-slate-400";
+      }
+
+      const filtersListContainer = document.getElementById('channel-filters-list');
+      if (filtersListContainer) {
+        if (whitelistedChannels.length === 0) {
+          filtersListContainer.innerHTML = `<div class="text-[11px] text-slate-500 italic text-center py-1">No whitelisted channels</div>`;
+        } else {
+          let fHtml = '';
+          whitelistedChannels.forEach((chan, idx) => {
+            fHtml += `
+              <div class="flex items-center justify-between bg-slate-950/60 border border-slate-800 px-2.5 py-1 rounded-md text-xs">
+                <span class="font-medium text-slate-300 truncate mr-2" title="${chan}"><i class="fa-solid fa-user-check text-[10px] text-blue-400 mr-1"></i> ${chan}</span>
+                <button onclick="removeChannelFilter(${idx})" title="Remove Channel" class="bg-slate-900 hover:bg-rose-600 hover:text-white text-[10px] px-1.5 py-0.5 rounded text-slate-400 transition shrink-0"><i class="fa-solid fa-xmark"></i></button>
+              </div>
+            `;
+          });
+          filtersListContainer.innerHTML = fHtml;
+        }
+      }
+
       if (controlList) {
         if (!state.current && state.queue.length === 0) {
           controlList.innerHTML = `<div class="text-xs text-slate-500 italic p-3 text-center bg-slate-900/40 rounded-lg">Queue is currently empty. Add links above!</div>`;
@@ -713,7 +858,6 @@
         }
       }
 
-      // Render Saved Playlists list
       const savedListContainer = document.getElementById('saved-playlists-list');
       if (savedListContainer) {
         if (savedPlaylists.length === 0) {
@@ -745,47 +889,37 @@
         if (titleEl) titleEl.innerText = state.current.title;
         if (creatorEl) creatorEl.innerText = state.current.creator;
       } else {
-        if (titleEl) titleEl.innerText = "No video playing";
-        if (creatorEl) creatorEl.innerText = "Waiting in queue";
+        if (titleEl) titleEl.innerText = "No video selected";
+        if (creatorEl) creatorEl.innerText = "No YouTuber assigned";
       }
 
-      const overlayUpcoming = document.getElementById('overlay-upcoming-list');
-      if (overlayUpcoming) {
+      const overlayUpcomingList = document.getElementById('overlay-upcoming-list');
+      if (overlayUpcomingList) {
         if (state.queue.length === 0) {
-          overlayUpcoming.innerHTML = `<div class="text-[11px] text-slate-500 italic text-center py-2">Queue loops automatically when finished</div>`;
+          overlayUpcomingList.innerHTML = `<div class="text-xs text-slate-500 italic text-center py-3">Queue is empty</div>`;
         } else {
-          let upcomingHtml = '';
+          let upHtml = '';
           state.queue.forEach((item, idx) => {
-            upcomingHtml += `
-              <div class="bg-slate-900/60 border border-slate-800/60 rounded p-2 text-xs flex flex-col gap-1">
-                <div class="text-[10px] flex justify-between items-center">
-                  <span class="font-mono text-red-400">#${idx + 1}</span>
-                  <span class="text-blue-400 font-semibold bg-blue-950/50 px-1.5 py-0.5 rounded flex items-center gap-1">
-                    <i class="fa-solid fa-user text-[8px]"></i> ${item.creator}
-                  </span>
+            upHtml += `
+              <div class="flex items-center justify-between bg-slate-900/60 border border-slate-800/60 px-2.5 py-1.5 rounded-lg text-[11px]">
+                <div class="flex items-center gap-2 truncate">
+                  <span class="text-slate-500 font-mono">#${idx + 1}</span>
+                  <span class="bg-blue-950/60 text-blue-300 px-1.5 py-0.5 rounded text-[10px] font-semibold shrink-0 border border-blue-900/40">${item.creator}</span>
+                  <span class="text-slate-300 truncate">${item.title}</span>
                 </div>
-                <div class="text-slate-200 text-xs font-medium truncate">${item.title}</div>
               </div>
             `;
           });
-          overlayUpcoming.innerHTML = upcomingHtml;
+          overlayUpcomingList.innerHTML = upHtml;
         }
       }
     }
 
-    window.addEventListener('DOMContentLoaded', () => {
+    window.onload = function() {
       checkObsQueryParam();
       loadState();
       renderAll();
-      updatePlayerInstance();
-    });
-
-    window.addEventListener('storage', (e) => {
-      if (e.key === 'yt_lets_watch_state_loop_v24' || e.key === 'yt_lets_watch_saved_playlists_v24') {
-        loadState();
-        renderAll();
-      }
-    });
+    };
   </script>
 </body>
 </html>

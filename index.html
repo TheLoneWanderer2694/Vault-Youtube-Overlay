@@ -428,7 +428,8 @@
         const playlistUrl = `https://www.youtube.com/playlist?list=${playlistId}`;
         const proxies = [
           `https://api.allorigins.win/get?url=${encodeURIComponent(playlistUrl)}`,
-          `https://corsproxy.io/?${encodeURIComponent(playlistUrl)}`
+          `https://corsproxy.io/?${encodeURIComponent(playlistUrl)}`,
+          `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(playlistUrl)}`
         ];
 
         let htmlText = null;
@@ -451,51 +452,44 @@
         }
 
         if (htmlText) {
-          const match = htmlText.match(/var ytInitialData = ({.*?});<\/script>/s) || htmlText.match(/window\["ytInitialData"\] = ({.*?});<\/script>/s);
-          if (match && match[1]) {
-            try {
-              const ytData = JSON.parse(match[1]);
-              const tabs = ytData.contents?.twoColumnBrowseResultsRenderer?.tabs;
-              if (tabs) {
-                for (const tab of tabs) {
-                  const tabRenderer = tab.tabRenderer;
-                  if (tabRenderer && tabRenderer.content) {
-                    const sectionList = tabRenderer.content.sectionListRenderer?.contents;
-                    if (sectionList) {
-                      for (const section of sectionList) {
-                        const itemSection = section.itemSectionRenderer?.contents;
-                        if (itemSection) {
-                          for (const item of itemSection) {
-                            const playlistRenderer = item.playlistVideoListRenderer;
-                            if (playlistRenderer && playlistRenderer.contents) {
-                              for (const videoRendererItem of playlistRenderer.contents) {
-                                const vData = videoRendererItem.playlistVideoRenderer;
-                                if (vData && vData.videoId) {
-                                  const vId = vData.videoId;
-                                  const vTitle = vData.title?.runs?.[0]?.text || `Video`;
-                                  const vAuthor = vData.shortBylineText?.runs?.[0]?.text || playlistCreator;
+          // Extract video IDs and titles using robust regex matching against ytInitialData
+          const videoIdRegex = /"videoId"\s*:\s*"([a-zA-Z0-9_-]{11})"/g;
+          const titleRegex = /"title"\s*:\s*\{"runs"\s*:\s*\[\{"text"\s*:\s*"([^"]+)"/g;
+          
+          let match;
+          const foundIds = new Set();
+          const extractedVideos = [];
 
-                                  const resolvedCreator = fallbackCreator && fallbackCreator !== "Featured Creator" ? fallbackCreator : vAuthor;
-                                  if (!isWhitelistActive || isChannelAllowed(resolvedCreator)) {
-                                    videos.push({
-                                      id: Math.random().toString(36).substring(2, 9),
-                                      title: vTitle,
-                                      creator: resolvedCreator,
-                                      url: `https://www.youtube.com/watch?v=${vId}`,
-                                      videoId: vId
-                                    });
-                                  }
-                                }
-                              }
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            } catch(jsonErr) {}
+          while ((match = videoIdRegex.exec(htmlText)) !== null) {
+            const vId = match[1];
+            if (!foundIds.has(vId)) {
+              foundIds.add(vId);
+              extractedVideos.push({ videoId: vId, title: `YouTube Video (${vId})` });
+            }
+          }
+
+          // Try to match titles corresponding to videos if available
+          let titleMatch;
+          let idx = 0;
+          while ((titleMatch = titleRegex.exec(htmlText)) !== null && idx < extractedVideos.length) {
+            const tText = titleMatch[1];
+            if (tText && tText.length > 2 && !tText.includes("Watch later") && !tText.includes("Queue")) {
+              extractedVideos[idx].title = tText;
+              idx++;
+            }
+          }
+
+          for (const v of extractedVideos) {
+            const resolvedCreator = playlistCreator;
+            if (!isWhitelistActive || isChannelAllowed(resolvedCreator)) {
+              videos.push({
+                id: Math.random().toString(36).substring(2, 9),
+                title: v.title,
+                creator: resolvedCreator,
+                url: `https://www.youtube.com/watch?v=${v.videoId}`,
+                videoId: v.videoId
+              });
+            }
           }
         }
 

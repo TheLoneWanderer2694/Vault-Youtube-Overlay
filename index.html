@@ -335,25 +335,25 @@
       try {
         let playlistCreator = fallbackCreator && fallbackCreator !== "Featured Creator" ? fallbackCreator : "Playlist Author";
         
-        // Try multiple CORS proxy fallback services and public scrapers to get all playlist videos reliably
-        const rssUrl = `https://www.youtube.com/feeds/videos.xml?playlist_id=${playlistId}`;
+        // Use a more robust scraping approach via multiple reliable CORS proxies and HTML scraping for playlists
+        const playlistUrl = `https://www.youtube.com/playlist?list=${playlistId}`;
         const proxies = [
-          `https://api.allorigins.win/get?url=${encodeURIComponent(rssUrl)}`,
-          `https://corsproxy.io/?${encodeURIComponent(rssUrl)}`,
-          `https://thingproxy.freeboard.io/fetch/${rssUrl}`
+          `https://api.allorigins.win/get?url=${encodeURIComponent(playlistUrl)}`,
+          `https://corsproxy.io/?${encodeURIComponent(playlistUrl)}`,
+          `https://thingproxy.freeboard.io/fetch/${playlistUrl}`
         ];
 
-        let xmlText = null;
+        let htmlText = null;
         for (const proxyUrl of proxies) {
           try {
-            const rssResponse = await fetch(proxyUrl);
-            if (rssResponse.ok) {
-              const data = await rssResponse.json();
+            const response = await fetch(proxyUrl);
+            if (response.ok) {
+              const data = await response.json();
               if (data && data.contents) {
-                xmlText = data.contents;
+                htmlText = data.contents;
                 break;
               } else if (typeof data === 'string') {
-                xmlText = data;
+                htmlText = data;
                 break;
               }
             }
@@ -362,31 +362,95 @@
           }
         }
 
-        if (xmlText) {
-          const parser = new DOMParser();
-          const xmlDoc = parser.parseFromString(xmlText, "text/xml");
-          const entries = xmlDoc.getElementsByTagName("entry");
+        if (htmlText) {
+          // Extract ytInitialData json from the YouTube playlist page markup
+          const match = htmlText.match(/var ytInitialData = ({.*?});<\/script>/s) || htmlText.match(/window\["ytInitialData"\] = ({.*?});<\/script>/s);
+          if (match && match[1]) {
+            try {
+              const ytData = JSON.parse(match[1]);
+              const tabs = ytData.contents?.twoColumnBrowseResultsRenderer?.tabs;
+              if (tabs) {
+                for (const tab of tabs) {
+                  const tabRenderer = tab.tabRenderer;
+                  if (tabRenderer && tabRenderer.content) {
+                    const sectionList = tabRenderer.content.sectionListRenderer?.contents;
+                    if (sectionList) {
+                      for (const section of sectionList) {
+                        const itemSection = section.itemSectionRenderer?.contents;
+                        if (itemSection) {
+                          for (const item of itemSection) {
+                            const playlistRenderer = item.playlistVideoListRenderer;
+                            if (playlistRenderer && playlistRenderer.contents) {
+                              for (const videoRendererItem of playlistRenderer.contents) {
+                                const vData = videoRendererItem.playlistVideoRenderer;
+                                if (vData && vData.videoId) {
+                                  const vId = vData.videoId;
+                                  const vTitle = vData.title?.runs?.[0]?.text || `Video`;
+                                  const vAuthor = vData.shortBylineText?.runs?.[0]?.text || playlistCreator;
 
-          for (let i = 0; i < entries.length; i++) {
-            const entry = entries[i];
-            const videoId = entry.getElementsByTagName("yt:videoId")[0]?.textContent;
-            const title = entry.getElementsByTagName("title")[0]?.textContent || `Video ${i+1}`;
-            const author = entry.getElementsByTagName("author")[0]?.getElementsByTagName("name")[0]?.textContent || playlistCreator;
+                                  videos.push({
+                                    id: Math.random().toString(36).substring(2, 9),
+                                    title: vTitle,
+                                    creator: fallbackCreator && fallbackCreator !== "Featured Creator" ? fallbackCreator : vAuthor,
+                                    url: `https://www.youtube.com/watch?v=${vId}`,
+                                    videoId: vId
+                                  });
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            } catch(jsonErr) {}
+          }
+        }
 
-            if (videoId) {
-              videos.push({
-                id: Math.random().toString(36).substring(2, 9),
-                title: title,
-                creator: fallbackCreator && fallbackCreator !== "Featured Creator" ? fallbackCreator : author,
-                url: `https://www.youtube.com/watch?v=${videoId}`,
-                videoId: videoId
-              });
-            }
+        // Fallback to RSS feed if page JSON scraping yielded no videos
+        if (videos.length === 0) {
+          const rssUrl = `https://www.youtube.com/feeds/videos.xml?playlist_id=${playlistId}`;
+          const rssProxies = [
+            `https://api.allorigins.win/get?url=${encodeURIComponent(rssUrl)}`,
+            `https://corsproxy.io/?${encodeURIComponent(rssUrl)}`
+          ];
+          for (const proxyUrl of rssProxies) {
+            try {
+              const rssResponse = await fetch(proxyUrl);
+              if (rssResponse.ok) {
+                const data = await rssResponse.json();
+                let xmlText = data.contents || data;
+                if (xmlText) {
+                  const parser = new DOMParser();
+                  const xmlDoc = parser.parseFromString(xmlText, "text/xml");
+                  const entries = xmlDoc.getElementsByTagName("entry");
+                  for (let i = 0; i < entries.length; i++) {
+                    const entry = entries[i];
+                    const videoId = entry.getElementsByTagName("yt:videoId")[0]?.textContent;
+                    const title = entry.getElementsByTagName("title")[0]?.textContent || `Video ${i+1}`;
+                    const author = entry.getElementsByTagName("author")[0]?.getElementsByTagName("name")[0]?.textContent || playlistCreator;
+
+                    if (videoId) {
+                      videos.push({
+                        id: Math.random().toString(36).substring(2, 9),
+                        title: title,
+                        creator: fallbackCreator && fallbackCreator !== "Featured Creator" ? fallbackCreator : author,
+                        url: `https://www.youtube.com/watch?v=${videoId}`,
+                        videoId: videoId
+                      });
+                    }
+                  }
+                  if (videos.length > 0) break;
+                }
+              }
+            } catch(e) {}
           }
         }
       } catch (err) {}
 
-      // Fallback if RSS parsing failed completely
+      // Final fallback if all automated parsing fails
       if (videos.length === 0) {
         videos.push({
           id: Math.random().toString(36).substring(2, 9),

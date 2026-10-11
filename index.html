@@ -56,7 +56,7 @@
         <h1 class="text-2xl font-bold flex items-center gap-2 text-red-500">
           <i class="fa-brands fa-youtube"></i> Let's Watch Queue & Saved Playlists
         </h1>
-        <p class="text-sm text-slate-400">Manage queue, auto-looping playlists, and save your custom queues locally in browser storage.</p>
+        <p class="text-sm text-slate-400">Manage unlimited queue items, auto-looping playlists, and save your custom queues locally in browser storage.</p>
       </div>
       <div class="flex items-center gap-3">
         <button onclick="toggleObsMode()" class="bg-slate-800 hover:bg-slate-700 text-xs px-3 py-2 rounded-lg font-medium transition border border-slate-700 flex items-center gap-2">
@@ -91,10 +91,10 @@
         <!-- Live Queue Manager List -->
         <div class="pt-4 border-t border-slate-800">
           <div class="flex justify-between items-center mb-3">
-            <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400">Live Queue Manager</h3>
+            <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400">Live Queue Manager (Unlimited)</h3>
             <span id="queue-counter" class="bg-slate-800 text-[11px] px-2.5 py-0.5 rounded-md font-bold text-slate-200">0 items</span>
           </div>
-          <div id="control-queue-list" class="space-y-2 max-h-72 overflow-y-auto pr-1">
+          <div id="control-queue-list" class="space-y-2 max-h-[380px] overflow-y-auto pr-1">
             <div class="text-xs text-slate-500 italic p-3 text-center bg-slate-900/40 rounded-lg">Queue is currently empty. Add links above!</div>
           </div>
         </div>
@@ -450,7 +450,6 @@
         }
       } catch (err) {}
 
-      // Fallback: If scraping yields nothing, generate an embed playlist item as well
       if (videos.length === 0) {
         const resolvedCreator = fallbackCreator || "Playlist Channel";
         videos.push({
@@ -676,7 +675,8 @@
 
       const controlList = document.getElementById('control-queue-list');
       const counterBadge = document.getElementById('queue-counter');
-      if (counterBadge) counterBadge.innerText = `${state.queue.length + (state.current ? 1 : 0)} items`;
+      const totalCount = state.queue.length + (state.current ? 1 : 0);
+      if (counterBadge) counterBadge.innerText = `${totalCount} items`;
 
       if (controlList) {
         if (!state.current && state.queue.length === 0) {
@@ -695,6 +695,8 @@
               </div>
             `;
           }
+          
+          // Render queue items (handling large/unlimited lists efficiently)
           state.queue.forEach((item, idx) => {
             html += `
               <div class="flex items-center justify-between bg-slate-900/80 border border-slate-800 p-2.5 rounded-lg text-xs">
